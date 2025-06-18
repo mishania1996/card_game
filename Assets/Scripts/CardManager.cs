@@ -33,31 +33,44 @@ public class CardManager : MonoBehaviour
 
     // Sets the visual face of a card based on whether it should show its front or back
     void SetCardFace(GameObject card, Sprite specificFrontSprite, bool showFront)
+{
+    // Get the main Image component on the card GameObject itself
+    Image frontImageComponent = card.GetComponent<Image>();
+    if (frontImageComponent == null)
     {
-        // Get the main Image component (for the front)
-        Image frontImageComponent = card.GetComponent<Image>();
-        // Get the child Image component for the back
-        Image backImageComponent = card.transform.Find("CardBackDisplay")?.GetComponent<Image>();
+        Debug.LogError("ERROR: Card prefab missing required Image component! Object: " + card.name + ". Make sure the root card prefab has an Image component.", card); // <--- MODIFIED LINE
+        return;
+    }
 
-        if (frontImageComponent == null || backImageComponent == null)
-        {
-            Debug.LogError("Card prefab missing required Image components (main or CardBackDisplay child)!", card);
-            return;
-        }
-
-        // Assign the specific front sprite if showing front
-        if (showFront && specificFrontSprite != null)
+    // ... (rest of your SetCardFace code remains the same) ...
+    if (showFront)
+    {
+        if (specificFrontSprite != null)
         {
             frontImageComponent.sprite = specificFrontSprite;
-            frontImageComponent.enabled = true; // Show the front image
-            backImageComponent.enabled = false;  // Hide the back image
         }
-        else // Show the back, or if no specific front sprite is provided
+        else
         {
-            frontImageComponent.enabled = false; // Hide the front image
-            backImageComponent.enabled = true;   // Show the back image
+            // Fallback or error if no specificFrontSprite provided but showFront is true
+            Debug.LogWarning("Attempted to show card front but no specificFrontSprite was provided for " + card.name);
+            // Ensure this parsing logic is safe if card.name is not 'Card_X'
+            // For example, you might have specific front sprites that align with certain card types
+            int cardIndex = int.Parse(card.name.Replace("Card_", ""));
+            if (cardIndex >= 0 && cardIndex < allCardFronts.Count)
+            {
+                frontImageComponent.sprite = allCardFronts[cardIndex];
+            }
+            else
+            {
+                Debug.LogError("Card name " + card.name + " does not map to a valid card front index.");
+            }
         }
     }
+    else // showFront is false, display the card back
+    {
+        frontImageComponent.sprite = cardBackSprite;
+    }
+}
 
     // Initializes the deck with all 36 cards, assigning a unique front to each
     void InitializeDeck()
@@ -143,6 +156,24 @@ public class CardManager : MonoBehaviour
         }
         Debug.Log("Dealt " + player2Hand.Count + " cards to Player 2.");
     }
+    private void UpdateDeckVisuals()
+    {
+        if (deckDrawArea == null)
+        {
+            Debug.LogError("Deck Draw Area is not assigned! Cannot update deck visuals.");
+            return;
+        }
+
+        // Re-position and set face for all cards remaining in the deck
+        foreach (GameObject card in deck)
+        {
+            card.transform.SetParent(deckDrawArea); // Ensure it's parented correctly
+            card.GetComponent<RectTransform>().anchoredPosition = Vector2.zero; // Center it
+            SetCardFace(card, null, false); // Always show the back
+            card.GetComponent<RectTransform>().SetAsLastSibling(); // Bring to top of its siblings in hierarchy (for visual stacking)
+        }
+    }
+    
     
     // --- Public Actions (Callable by UI Buttons) ---
     // --- New Wrapper Method for Draw Card Button ---
@@ -152,7 +183,12 @@ public class CardManager : MonoBehaviour
         DrawCard(player1Hand, player1HandArea, true);
     }
     // --- End New Wrapper Method ---
-    
+    public void OnDrawPlayer2CardButtonClicked()
+    {
+    // Call the existing DrawCard method, specifying Player 2's hand, area, and visibility
+    // Player 2 is the opponent, so we want their drawn cards to show their BACK.
+        DrawCard(player2Hand, player2HandArea, false); // 'false' for showFront
+    }
     // Draws a single card from the main deck to a specified hand/area
     public void DrawCard(List<GameObject> targetHand, RectTransform targetArea, bool showFront)
     {
@@ -164,11 +200,23 @@ public class CardManager : MonoBehaviour
 
         GameObject cardToDraw = deck[0]; // Get the top card from the deck
         deck.RemoveAt(0); // Remove it from the deck list
-
+	
+	UpdateDeckVisuals();
+	
         cardToDraw.transform.SetParent(targetArea); // Move card to the target area's parent
 
         // Get the card's specific front sprite reference (which we stored in its main Image component)
-        Sprite originalFrontSprite = cardToDraw.GetComponent<Image>().sprite;
+        // Retrieve the unique front sprite based on the card's name (e.g., "Card_0" -> allCardFronts[0])
+        Sprite originalFrontSprite = null;
+	int cardIndex = -1;
+	if (int.TryParse(cardToDraw.name.Replace("Card_", ""), out cardIndex) && cardIndex >= 0 && cardIndex < allCardFronts.Count)
+	{
+    		originalFrontSprite = allCardFronts[cardIndex];
+	}
+	else
+	{
+    		Debug.LogError($"Could not determine front sprite for card named: {cardToDraw.name}. Check naming convention.", cardToDraw);
+	}
         SetCardFace(cardToDraw, originalFrontSprite, showFront); // Set its face based on 'showFront'
 
         // Arrange the cards in the target hand (simple horizontal spread)
@@ -210,12 +258,18 @@ public class CardManager : MonoBehaviour
             playableCard.ClearHandReference();
         }
         cardToPlay.transform.SetParent(discardPileArea); // Move card to the discard area
-        
-        
-        cardToPlay.transform.SetParent(discardPileArea); // Move card to the discard area
 
-        // Get the card's specific front sprite reference
-        Sprite originalFrontSprite = cardToPlay.GetComponent<Image>().sprite;
+        // Retrieve the unique front sprite based on the card's name
+	Sprite originalFrontSprite = null;
+	int cardIndex = -1;
+	if (int.TryParse(cardToPlay.name.Replace("Card_", ""), out cardIndex) && cardIndex >= 0 && cardIndex < allCardFronts.Count)
+	{
+	    originalFrontSprite = allCardFronts[cardIndex];
+	}
+	else
+	{
+	    Debug.LogError($"Could not determine front sprite for card named: {cardToPlay.name}. Check naming convention.", cardToPlay);
+	}
         SetCardFace(cardToPlay, originalFrontSprite, true); // Always show front on discard pile
 
         cardToPlay.GetComponent<RectTransform>().anchoredPosition = Vector2.zero; // Center on discard pile
