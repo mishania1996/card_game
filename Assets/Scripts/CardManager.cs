@@ -1,307 +1,321 @@
-using System.Collections.Generic; // For List
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI; // For Image and RectTransform
+using UnityEngine.UI;
+using Unity.Netcode;
+using System.Linq;
 
-public class CardManager : MonoBehaviour
+public class CardManager : NetworkBehaviour
 {
-    // Public variables to assign in the Inspector
-    public GameObject cardPrefab; // Drag your 'Card' prefab here
-    public List<Sprite> allCardFronts = new List<Sprite>(); // Drag all 36 front sprites here
-    public Sprite cardBackSprite; // Drag your single card back sprite here
-
-    [Header("UI Areas - Drag Panels from Hierarchy")]
+    [Header("UI Areas")]
     public RectTransform deckDrawArea;
     public RectTransform discardPileArea;
     public RectTransform player1HandArea;
     public RectTransform player2HandArea;
 
-    // Private lists to hold cards
-    private List<GameObject> deck = new List<GameObject>(); // Cards in the draw pile
-    private List<GameObject> discardPile = new List<GameObject>(); // Cards in the discard pile
-    private List<GameObject> player1Hand = new List<GameObject>(); // Player 1's cards
-    private List<GameObject> player2Hand = new List<GameObject>(); // Player 2's cards (opponent)
+    [Header("Prefabs")]
+    public GameObject cardPrefab;
 
-    void Start()
+    private Dictionary<string, Sprite> allCardSprites = new Dictionary<string, Sprite>();
+    private Sprite cardBackSprite;
+
+    // Server-side authoritative lists
+    private List<GameObject> deck = new List<GameObject>();
+    private List<GameObject> discardPile = new List<GameObject>();
+    // Client-side visual lists
+    private List<GameObject> player1Hand = new List<GameObject>();
+    private List<GameObject> player2Hand = new List<GameObject>();
+
+    // Player tracking
+    private Dictionary<ulong, bool> playersReady = new Dictionary<ulong, bool>();
+    private ulong player1_clientId = 99;
+    private ulong player2_clientId = 99;
+    
+    // Card definitions for building the deck
+    private readonly List<string> suits = new List<string> { "hearts", "diamonds", "clubs", "spades" };
+    private readonly List<string> ranks = new List<string> { "2", "3", "4", "5", "6", "7", "8", "9", "10", "jack", "queen", "king", "ace" };
+
+
+    public override void OnNetworkSpawn()
     {
+        LoadCardSprites();
+
+        if (IsServer)
+        {
+            NetworkManager.Singleton.OnClientConnectedCallback += ServerOnClientConnected;
+        }
+    }
+
+    private void LoadCardSprites()
+    {
+        cardBackSprite = Resources.Load<Sprite>("CardSprites/back_card");
+        if (cardBackSprite == null) Debug.LogError("Card Back Sprite not found! Ensure it's named 'back_card' in 'Assets/Resources/CardSprites'.");
+
+        Sprite[] loadedSprites = Resources.LoadAll<Sprite>("CardSprites");
+        allCardSprites.Clear();
+        foreach (Sprite sprite in loadedSprites)
+        {
+            string spriteName = sprite.name;
+
+            // --- THIS IS THE FIX ---
+            // This logic cleans up the sprite names that Unity provides.
+            // For example, it turns "king_of_spades_0" into "king_of_spades"
+            int underscoreIndex = spriteName.LastIndexOf('_');
+            if (underscoreIndex > -1)
+            {
+                string suffix = spriteName.Substring(underscoreIndex + 1);
+                if(int.TryParse(suffix, out _))
+                {
+                    spriteName = spriteName.Substring(0, underscoreIndex);
+                }
+            }
+            
+            // This prevents adding the back card or duplicates to the front card dictionary
+            if (spriteName != "back_card" && !allCardSprites.ContainsKey(spriteName))
+            {
+                allCardSprites.Add(spriteName, sprite);
+            }
+        }
+        
+        Debug.Log($"Loaded {allCardSprites.Count} unique card front sprites from Resources.");
+    }
+
+    private void ServerOnClientConnected(ulong clientId)
+    {
+        if (!IsServer) return;
+
+        if (!playersReady.ContainsKey(clientId))
+        {
+            playersReady.Add(clientId, false);
+        }
+
+        if (player1_clientId == 99) player1_clientId = clientId;
+        else if (player2_clientId == 99) player2_clientId = clientId;
+
+        if (playersReady.Count == 2)
+        {
+            Debug.Log($"Two players connected. P1 is Client {player1_clientId}, P2 is Client {player2_clientId}. Starting game setup.");
+            StartCoroutine(ServerGameSetup());
+        }
+    }
+
+    IEnumerator ServerGameSetup()
+    {
+        yield return new WaitForEndOfFrame();
         InitializeDeck();
         ShuffleDeck();
-        PlaceDeckOnDrawArea();
-        DealInitialHands(5); // Deal 5 cards to each player
+        DealInitialHands(5);
     }
 
-    // --- Core Card Management Functions ---
-
-    // Sets the visual face of a card based on whether it should show its front or back
-    void SetCardFace(GameObject card, Sprite specificFrontSprite, bool showFront)
-{
-    // Get the main Image component on the card GameObject itself
-    Image frontImageComponent = card.GetComponent<Image>();
-    if (frontImageComponent == null)
-    {
-        Debug.LogError("ERROR: Card prefab missing required Image component! Object: " + card.name + ". Make sure the root card prefab has an Image component.", card); // <--- MODIFIED LINE
-        return;
-    }
-
-    // ... (rest of your SetCardFace code remains the same) ...
-    if (showFront)
-    {
-        if (specificFrontSprite != null)
-        {
-            frontImageComponent.sprite = specificFrontSprite;
-        }
-        else
-        {
-            // Fallback or error if no specificFrontSprite provided but showFront is true
-            Debug.LogWarning("Attempted to show card front but no specificFrontSprite was provided for " + card.name);
-            // Ensure this parsing logic is safe if card.name is not 'Card_X'
-            // For example, you might have specific front sprites that align with certain card types
-            int cardIndex = int.Parse(card.name.Replace("Card_", ""));
-            if (cardIndex >= 0 && cardIndex < allCardFronts.Count)
-            {
-                frontImageComponent.sprite = allCardFronts[cardIndex];
-            }
-            else
-            {
-                Debug.LogError("Card name " + card.name + " does not map to a valid card front index.");
-            }
-        }
-    }
-    else // showFront is false, display the card back
-    {
-        frontImageComponent.sprite = cardBackSprite;
-    }
-}
-
-    // Initializes the deck with all 36 cards, assigning a unique front to each
     void InitializeDeck()
     {
-        if (cardPrefab == null) { Debug.LogError("Card Prefab is not assigned!"); return; }
-        if (allCardFronts.Count == 0) { Debug.LogError("No card front sprites assigned!"); return; }
-        if (cardBackSprite == null) { Debug.LogError("Card Back Sprite is not assigned!"); return; }
-        if (allCardFronts.Count != 36) { Debug.LogWarning("Expected 36 card fronts, but found " + allCardFronts.Count); }
+        if (!IsServer) return;
 
-
-        for (int i = 0; i < allCardFronts.Count; i++)
+        // Loop through our defined suits and ranks to build a predictable, valid deck.
+        foreach (string suit in suits)
         {
-            // Instantiate a new card from the prefab
-            GameObject newCard = Instantiate(cardPrefab, transform); // 'transform' makes it a child of CardManager
-            newCard.name = "Card_" + i; // Name for debugging (e.g., Card_0, Card_1, etc.)
-
-            // Store the unique front sprite on the card itself for later reference
-            // A simple way for now is to use its main Image component, it will hold the reference.
-            Image frontImageComponent = newCard.GetComponent<Image>();
-            if (frontImageComponent != null)
+            foreach (string rank in ranks)
             {
-                frontImageComponent.sprite = allCardFronts[i]; // Temporarily store the front sprite here
-            }
-            else
-            {
-                Debug.LogError("Card prefab missing main Image component!", newCard);
-            }
+                // Construct the name we expect the sprite to have.
+                string cardSpriteName = $"{rank}_of_{suit}";
 
-            deck.Add(newCard); // Add the newly created card to our deck list
+                // Check if a sprite with this name actually exists in our dictionary.
+                if (allCardSprites.ContainsKey(cardSpriteName))
+                {
+                    GameObject newCard = Instantiate(cardPrefab);
+                    
+                    // 1. We MUST spawn the object FIRST to make it "live" on the network.
+                    NetworkObject no = newCard.GetComponent<NetworkObject>();
+                    no.Spawn(true);
+
+                    // 2. NOW that it's live, it's safe to set the synchronized NetworkVariables.
+                    CardData cardData = newCard.GetComponent<CardData>();
+                    cardData.Rank.Value = rank;
+                    cardData.Suit.Value = suit;
+                    
+                    // Optionally set the local GameObject name for easier debugging
+                    newCard.name = cardSpriteName;
+                    
+                    deck.Add(newCard);
+                    ParentAndAnimateCardClientRpc(new NetworkObjectReference(newCard), CardLocation.Deck, 0);
+                }
+                else
+                {
+                    Debug.LogWarning($"Card sprite not found for {cardSpriteName} in Resources. Skipping this card.");
+                }
+            }
         }
-        Debug.Log("Deck initialized with " + deck.Count + " cards.");
     }
 
-    // Randomly shuffles the deck
     void ShuffleDeck()
     {
-        for (int i = 0; i < deck.Count; i++)
+        if (!IsServer) return;
+
+        var random = new System.Random();
+        for (int i = deck.Count - 1; i > 0; i--)
         {
+            int randomIndex = random.Next(0, i + 1);
+            
+            // Swap the elements at position i and the random position
             GameObject temp = deck[i];
-            int randomIndex = Random.Range(i, deck.Count);
             deck[i] = deck[randomIndex];
             deck[randomIndex] = temp;
         }
-        Debug.Log("Deck shuffled.");
+        Debug.Log("Deck has been shuffled correctly.");
     }
 
-    // Places all cards in the deck onto the visual draw area, showing their backs
-    void PlaceDeckOnDrawArea()
-    {
-        if (deckDrawArea == null) { Debug.LogError("Deck Draw Area is not assigned!"); return; }
-
-        foreach (GameObject card in deck)
-        {
-            card.transform.SetParent(deckDrawArea); // Move card to draw area parent
-            card.GetComponent<RectTransform>().anchoredPosition = Vector2.zero; // Center it within the area
-            card.GetComponent<RectTransform>().SetAsLastSibling(); // Puts it visually on top of other cards in the stack
-
-            // Always show the back for cards in the draw pile
-            SetCardFace(card, null, false); // Null for front sprite, as we just need to show back
-        }
-    }
-
-    // Deals initial hands to players
     void DealInitialHands(int numCardsPerPlayer)
     {
-        if (deck.Count < numCardsPerPlayer * 2)
-        {
-            Debug.LogWarning("Not enough cards in deck to deal " + numCardsPerPlayer + " to each player.");
-            return;
-        }
+        if (!IsServer) return;
 
-        // Deal to Player 1 (show front)
+        // --- NEW DEBUG LOG ---
+        // This will tell us if the deck has cards before we try to deal.
+        Debug.Log($"Dealing hands. Deck count is: {deck.Count}");
+
         for (int i = 0; i < numCardsPerPlayer; i++)
         {
-            DrawCard(player1Hand, player1HandArea, true);
-        }
-        Debug.Log("Dealt " + player1Hand.Count + " cards to Player 1.");
-
-        // Deal to Player 2 (opponent, show back)
-        for (int i = 0; i < numCardsPerPlayer; i++)
-        {
-            DrawCard(player2Hand, player2HandArea, false);
-        }
-        Debug.Log("Dealt " + player2Hand.Count + " cards to Player 2.");
-    }
-    private void UpdateDeckVisuals()
-    {
-        if (deckDrawArea == null)
-        {
-            Debug.LogError("Deck Draw Area is not assigned! Cannot update deck visuals.");
-            return;
-        }
-
-        // Re-position and set face for all cards remaining in the deck
-        foreach (GameObject card in deck)
-        {
-            card.transform.SetParent(deckDrawArea); // Ensure it's parented correctly
-            card.GetComponent<RectTransform>().anchoredPosition = Vector2.zero; // Center it
-            SetCardFace(card, null, false); // Always show the back
-            card.GetComponent<RectTransform>().SetAsLastSibling(); // Bring to top of its siblings in hierarchy (for visual stacking)
+            if(deck.Count > 0) DrawCard(player1_clientId);
+            if(deck.Count > 0) DrawCard(player2_clientId);
         }
     }
-    
-    
-    // --- Public Actions (Callable by UI Buttons) ---
-    // --- New Wrapper Method for Draw Card Button ---
-    public void OnDrawPlayer1CardButtonClicked()
+
+    public void DrawCard(ulong targetClientId)
     {
-    // Call the existing DrawCard method, specifying Player 1's hand, area, and visibility
-        DrawCard(player1Hand, player1HandArea, true);
-    }
-    // --- End New Wrapper Method ---
-    public void OnDrawPlayer2CardButtonClicked()
-    {
-    // Call the existing DrawCard method, specifying Player 2's hand, area, and visibility
-    // Player 2 is the opponent, so we want their drawn cards to show their BACK.
-        DrawCard(player2Hand, player2HandArea, false); // 'false' for showFront
-    }
-    // Draws a single card from the main deck to a specified hand/area
-    public void DrawCard(List<GameObject> targetHand, RectTransform targetArea, bool showFront)
-    {
-        if (deck.Count == 0)
-        {
-            Debug.Log("Deck is empty! Cannot draw a card.");
-            return;
-        }
-
-        GameObject cardToDraw = deck[0]; // Get the top card from the deck
-        deck.RemoveAt(0); // Remove it from the deck list
-	
-	UpdateDeckVisuals();
-	
-        cardToDraw.transform.SetParent(targetArea); // Move card to the target area's parent
-
-        // Get the card's specific front sprite reference (which we stored in its main Image component)
-        // Retrieve the unique front sprite based on the card's name (e.g., "Card_0" -> allCardFronts[0])
-        Sprite originalFrontSprite = null;
-	int cardIndex = -1;
-	if (int.TryParse(cardToDraw.name.Replace("Card_", ""), out cardIndex) && cardIndex >= 0 && cardIndex < allCardFronts.Count)
-	{
-    		originalFrontSprite = allCardFronts[cardIndex];
-	}
-	else
-	{
-    		Debug.LogError($"Could not determine front sprite for card named: {cardToDraw.name}. Check naming convention.", cardToDraw);
-	}
-        SetCardFace(cardToDraw, originalFrontSprite, showFront); // Set its face based on 'showFront'
-
-        // Arrange the cards in the target hand (simple horizontal spread)
-        targetHand.Add(cardToDraw); // Add to the target hand list
-        // Get the PlayableCard component and tell it which hand it belongs to
-        PlayableCard playableCard = cardToDraw.GetComponent<PlayableCard>();
-        if (playableCard != null)
-        {
-            playableCard.SetHandReference(targetHand);
-        }
-        else
-        {
-            Debug.LogWarning($"Card {cardToDraw.name} is missing PlayableCard component!", cardToDraw);
-        }
-
-        ArrangeHand(targetHand, targetArea);
-
-        Debug.Log("Card drawn. Deck size: " + deck.Count + ", Hand size: " + targetHand.Count + " for " + targetArea.name);
-    }
-
-    // Moves a card from a player's hand to the discard pile
-    // NOTE: This basic implementation assumes you'll manually assign a card for testing.
-    // For a real game, cards in hand would be clickable and pass themselves as 'cardToPlay'.
-    public void PlayCardToDiscardPile(GameObject cardToPlay, List<GameObject> sourceHand)
-    {
-        if (!sourceHand.Contains(cardToPlay))
-        {
-            Debug.LogWarning("Card is not in the specified hand or has already been played!", cardToPlay);
-            return;
-        }
-
-        sourceHand.Remove(cardToPlay); // Remove card from the source hand
-        discardPile.Add(cardToPlay);   // Add card to the discard pile
+        if (!IsServer || deck.Count == 0) return;
+        GameObject cardToDraw = deck[0];
+        deck.RemoveAt(0);
         
-        // Clear the hand reference from the PlayableCard component
-        PlayableCard playableCard = cardToPlay.GetComponent<PlayableCard>();
-        if (playableCard != null)
-        {
-            playableCard.ClearHandReference();
-        }
-        cardToPlay.transform.SetParent(discardPileArea); // Move card to the discard area
+        List<GameObject> targetHand = (targetClientId == player1_clientId) ? player1Hand : player2Hand;
+        targetHand.Add(cardToDraw);
 
-        // Retrieve the unique front sprite based on the card's name
-	Sprite originalFrontSprite = null;
-	int cardIndex = -1;
-	if (int.TryParse(cardToPlay.name.Replace("Card_", ""), out cardIndex) && cardIndex >= 0 && cardIndex < allCardFronts.Count)
-	{
-	    originalFrontSprite = allCardFronts[cardIndex];
-	}
-	else
-	{
-	    Debug.LogError($"Could not determine front sprite for card named: {cardToPlay.name}. Check naming convention.", cardToPlay);
-	}
-        SetCardFace(cardToPlay, originalFrontSprite, true); // Always show front on discard pile
-
-        cardToPlay.GetComponent<RectTransform>().anchoredPosition = Vector2.zero; // Center on discard pile
-        cardToPlay.GetComponent<RectTransform>().SetAsLastSibling(); // Ensure it's on top of other discards visually
-
-        Debug.Log(cardToPlay.name + " played to discard pile. Discard pile size: " + discardPile.Count);
-
-        // Re-arrange the cards remaining in the source hand
-        ArrangeHand(sourceHand, sourceHand == player1Hand ? player1HandArea : player2HandArea);
+        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId);
     }
 
-    // Helper function to arrange cards horizontally in a hand/area
+    public void PlayCardToDiscardPile(GameObject cardToPlay, ulong requestingClientId)
+    {
+        if (!IsServer) return;
+
+        if (!IsCardInPlayerHand(cardToPlay, requestingClientId))
+        {
+            Debug.LogError($"SECURITY VIOLATION: Client {requestingClientId} tried to play a card they do not own!");
+            return;
+        }
+
+        if (requestingClientId == player1_clientId) player1Hand.Remove(cardToPlay);
+        else if (requestingClientId == player2_clientId) player2Hand.Remove(cardToPlay);
+
+        discardPile.Add(cardToPlay);
+        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0);
+    }
+
+    public void OnDrawCardButtonPressed()
+    {
+        RequestDrawCardServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestDrawCardServerRpc(ServerRpcParams rpcParams = default)
+    {
+        ulong requestingClientId = rpcParams.Receive.SenderClientId;
+        DrawCard(requestingClientId);
+    }
+    
+    // --- THIS IS THE MISSING ENUM ---
+    private enum CardLocation { Deck, PlayerHand, Discard }
+
+    // --- THIS IS THE MISSING CLIENT RPC ---
+    [ClientRpc]
+    private void ParentAndAnimateCardClientRpc(NetworkObjectReference cardRef, CardLocation location, ulong ownerClientId, ClientRpcParams clientRpcParams = default)
+    {
+        if (!cardRef.TryGet(out NetworkObject cardNetworkObject)) return;
+        
+        GameObject card = cardNetworkObject.gameObject;
+        bool isMyCard = (ownerClientId == NetworkManager.Singleton.LocalClientId);
+        
+        switch (location)
+        {
+            case CardLocation.Deck:
+                card.transform.SetParent(deckDrawArea, false);
+                SetCardFace(card, false);
+                break;
+            case CardLocation.Discard:
+                card.GetComponent<PlayableCard>().ClearHandReference();
+                if(player1Hand.Contains(card)) player1Hand.Remove(card);
+                if(player2Hand.Contains(card)) player2Hand.Remove(card);
+                if(!discardPile.Contains(card)) discardPile.Add(card);
+                card.transform.SetParent(discardPileArea, false);
+                SetCardFace(card, true);
+                break;
+            case CardLocation.PlayerHand:
+                RectTransform targetArea = isMyCard ? player1HandArea : player2HandArea;
+                List<GameObject> targetHandList = isMyCard ? player1Hand : player2Hand;
+                if(!targetHandList.Contains(card)) targetHandList.Add(card);
+                card.GetComponent<PlayableCard>().SetHandReference(targetHandList);
+                card.transform.SetParent(targetArea, false);
+                SetCardFace(card, isMyCard);
+                break;
+        }
+
+        card.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
+        ArrangeHand(player1Hand, player1HandArea);
+        ArrangeHand(player2Hand, player2HandArea);
+    }
+
+    private void SetCardFace(GameObject card, bool showFront)
+    {
+        // Default to the card back
+        Sprite spriteToSet = cardBackSprite;
+
+        // If we need to show the front, find the correct sprite
+        if (showFront)
+        {
+            CardData cardData = card.GetComponent<CardData>();
+            if (cardData != null)
+            {
+                // Construct the sprite name from the card's synchronized data
+                string spriteName = $"{cardData.Rank.Value}_of_{cardData.Suit.Value}";
+
+                // Try to get the sprite from our dictionary
+                if (allCardSprites.TryGetValue(spriteName, out Sprite frontSprite))
+                {
+                    spriteToSet = frontSprite;
+                }
+                else
+                {
+                    // If we can't find it, log an error but still show the back as a fallback
+                    Debug.LogError($"Could not find sprite named '{spriteName}' in the dictionary.");
+                }
+            }
+        }
+        
+        // Apply the determined sprite to the Image component
+        card.GetComponent<Image>().sprite = spriteToSet;
+    }
+
+    private bool IsCardInPlayerHand(GameObject card, ulong targetClientId)
+    {
+        List<GameObject> targetHand = (targetClientId == player1_clientId) ? player1Hand : player2Hand;
+        return targetHand != null && targetHand.Contains(card);
+    }
+    
     void ArrangeHand(List<GameObject> hand, RectTransform handArea)
     {
+        if (hand == null || hand.Count == 0) return;
+        
+        hand.RemoveAll(item => item == null);
         if (hand.Count == 0) return;
 
-        // Get the width of a single card from the prefab (assuming all cards are same size)
-        float cardWidth = cardPrefab.GetComponent<RectTransform>().rect.width;
-        float spacing = cardWidth * 0.7f; // Overlap cards slightly (e.g., 70% of card width)
-
-        // Calculate starting X position to center the hand
-        float totalHandWidth = (hand.Count - 1) * spacing;
+        float cardWidth = hand[0].GetComponent<RectTransform>().rect.width;
+        float overlapAmount = 0.6f;
+        float spacing = cardWidth * (1 - overlapAmount);
+        float totalHandWidth = (hand.Count - 1) * spacing + cardWidth;
         float startX = -totalHandWidth / 2f;
-
         for (int i = 0; i < hand.Count; i++)
         {
+            if (hand[i] == null) continue; 
             RectTransform cardRect = hand[i].GetComponent<RectTransform>();
-            if (cardRect != null)
-            {
-                cardRect.anchoredPosition = new Vector2(startX + i * spacing, 0);
-                cardRect.SetAsLastSibling(); // Ensures the card is rendered on top of previous cards in the same hand
-            }
+            cardRect.anchoredPosition = new Vector2(startX + (i * spacing), 0);
+            cardRect.SetAsLastSibling();
         }
     }
 }
