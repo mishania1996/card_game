@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Unity.Netcode;
 using System.Linq;
+using Unity.Collections; 
 
 public class CardManager : NetworkBehaviour
 {
@@ -111,33 +112,25 @@ public class CardManager : NetworkBehaviour
     {
         if (!IsServer) return;
 
-        // Loop through our defined suits and ranks to build a predictable, valid deck.
         foreach (string suit in suits)
         {
             foreach (string rank in ranks)
             {
-                // Construct the name we expect the sprite to have.
                 string cardSpriteName = $"{rank}_of_{suit}";
-
-                // Check if a sprite with this name actually exists in our dictionary.
                 if (allCardSprites.ContainsKey(cardSpriteName))
                 {
                     GameObject newCard = Instantiate(cardPrefab);
-                    
-                    // 1. We MUST spawn the object FIRST to make it "live" on the network.
                     NetworkObject no = newCard.GetComponent<NetworkObject>();
                     no.Spawn(true);
 
-                    // 2. NOW that it's live, it's safe to set the synchronized NetworkVariables.
                     CardData cardData = newCard.GetComponent<CardData>();
                     cardData.Rank.Value = rank;
                     cardData.Suit.Value = suit;
-                    
-                    // Optionally set the local GameObject name for easier debugging
                     newCard.name = cardSpriteName;
                     
                     deck.Add(newCard);
-                    ParentAndAnimateCardClientRpc(new NetworkObjectReference(newCard), CardLocation.Deck, 0);
+                    // Pass empty strings for suit/rank since it's face down anyway
+                    ParentAndAnimateCardClientRpc(new NetworkObjectReference(newCard), CardLocation.Deck, 0, "", "");
                 }
                 else
                 {
@@ -188,7 +181,9 @@ public class CardManager : NetworkBehaviour
         List<GameObject> targetHand = (targetClientId == player1_clientId) ? player1Hand : player2Hand;
         targetHand.Add(cardToDraw);
 
-        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId);
+        CardData cardData = cardToDraw.GetComponent<CardData>();
+        // Pass the card's actual suit and rank into the RPC
+        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId, cardData.Suit.Value, cardData.Rank.Value);
     }
 
     public void PlayCardToDiscardPile(GameObject cardToPlay, ulong requestingClientId)
@@ -205,7 +200,10 @@ public class CardManager : NetworkBehaviour
         else if (requestingClientId == player2_clientId) player2Hand.Remove(cardToPlay);
 
         discardPile.Add(cardToPlay);
-        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0);
+
+        CardData cardData = cardToPlay.GetComponent<CardData>();
+        // Pass the card's actual suit and rank into the RPC
+        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
     }
 
     public void OnDrawCardButtonPressed()
@@ -223,9 +221,8 @@ public class CardManager : NetworkBehaviour
     // --- THIS IS THE MISSING ENUM ---
     private enum CardLocation { Deck, PlayerHand, Discard }
 
-    // --- THIS IS THE MISSING CLIENT RPC ---
     [ClientRpc]
-    private void ParentAndAnimateCardClientRpc(NetworkObjectReference cardRef, CardLocation location, ulong ownerClientId, ClientRpcParams clientRpcParams = default)
+    private void ParentAndAnimateCardClientRpc(NetworkObjectReference cardRef, CardLocation location, ulong ownerClientId, FixedString32Bytes suit, FixedString32Bytes rank, ClientRpcParams clientRpcParams = default)
     {
         if (!cardRef.TryGet(out NetworkObject cardNetworkObject)) return;
         
@@ -236,7 +233,7 @@ public class CardManager : NetworkBehaviour
         {
             case CardLocation.Deck:
                 card.transform.SetParent(deckDrawArea, false);
-                SetCardFace(card, false);
+                SetCardFace(card, false, "", ""); // Face down
                 break;
             case CardLocation.Discard:
                 card.GetComponent<PlayableCard>().ClearHandReference();
@@ -244,7 +241,7 @@ public class CardManager : NetworkBehaviour
                 if(player2Hand.Contains(card)) player2Hand.Remove(card);
                 if(!discardPile.Contains(card)) discardPile.Add(card);
                 card.transform.SetParent(discardPileArea, false);
-                SetCardFace(card, true);
+                SetCardFace(card, true, suit, rank); // Face up, passing data
                 break;
             case CardLocation.PlayerHand:
                 RectTransform targetArea = isMyCard ? player1HandArea : player2HandArea;
@@ -252,7 +249,7 @@ public class CardManager : NetworkBehaviour
                 if(!targetHandList.Contains(card)) targetHandList.Add(card);
                 card.GetComponent<PlayableCard>().SetHandReference(targetHandList);
                 card.transform.SetParent(targetArea, false);
-                SetCardFace(card, isMyCard);
+                SetCardFace(card, isMyCard, suit, rank); // Show face based on ownership, passing data
                 break;
         }
 
@@ -260,37 +257,26 @@ public class CardManager : NetworkBehaviour
         ArrangeHand(player1Hand, player1HandArea);
         ArrangeHand(player2Hand, player2HandArea);
     }
-
-    private void SetCardFace(GameObject card, bool showFront)
+    
+    private void SetCardFace(GameObject card, bool showFront, FixedString32Bytes suit, FixedString32Bytes rank)
     {
-        // Default to the card back
         Sprite spriteToSet = cardBackSprite;
-
-        // If we need to show the front, find the correct sprite
         if (showFront)
         {
-            CardData cardData = card.GetComponent<CardData>();
-            if (cardData != null)
+            // We construct the name from the parameters passed directly into the RPC
+            string spriteName = $"{rank}_of_{suit}";
+            if (!allCardSprites.TryGetValue(spriteName, out spriteToSet))
             {
-                // Construct the sprite name from the card's synchronized data
-                string spriteName = $"{cardData.Rank.Value}_of_{cardData.Suit.Value}";
-
-                // Try to get the sprite from our dictionary
-                if (allCardSprites.TryGetValue(spriteName, out Sprite frontSprite))
-                {
-                    spriteToSet = frontSprite;
-                }
-                else
-                {
-                    // If we can't find it, log an error but still show the back as a fallback
-                    Debug.LogError($"Could not find sprite named '{spriteName}' in the dictionary.");
-                }
+                Debug.LogError($"Could not find sprite named '{spriteName}' in the dictionary.");
+                spriteToSet = cardBackSprite; // Fallback
             }
         }
-        
-        // Apply the determined sprite to the Image component
         card.GetComponent<Image>().sprite = spriteToSet;
     }
+    
+    
+
+    
 
     private bool IsCardInPlayerHand(GameObject card, ulong targetClientId)
     {
