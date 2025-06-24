@@ -36,16 +36,21 @@ public class CardManager : NetworkBehaviour
     private readonly List<string> suits = new List<string> { "hearts", "diamonds", "clubs", "spades" };
     private readonly List<string> ranks = new List<string> { "2", "3", "4", "5", "6", "7", "8", "9", "10", "jack", "queen", "king", "ace" };
 
-
+	// This is a special Netcode function called automatically on all clients and the host
+    // when this NetworkObject is created on the network. It's the main entry point for setup.
     public override void OnNetworkSpawn()
-    {
+    {	
+    	// This runs for everyone to ensure all players have the card art loaded.
         LoadCardSprites();
-
+		
+		// The following logic is for the server only.
         if (IsServer)
-        {
+        {	
+        	// Subscribe a function to be called every time a new client connects.
             NetworkManager.Singleton.OnClientConnectedCallback += ServerOnClientConnected;
         }
     }
+
 
     private void LoadCardSprites()
     {
@@ -54,11 +59,11 @@ public class CardManager : NetworkBehaviour
 
         Sprite[] loadedSprites = Resources.LoadAll<Sprite>("CardSprites");
         allCardSprites.Clear();
+        
         foreach (Sprite sprite in loadedSprites)
         {
             string spriteName = sprite.name;
 
-            // --- THIS IS THE FIX ---
             // This logic cleans up the sprite names that Unity provides.
             // For example, it turns "king_of_spades_0" into "king_of_spades"
             int underscoreIndex = spriteName.LastIndexOf('_');
@@ -80,16 +85,20 @@ public class CardManager : NetworkBehaviour
         
         Debug.Log($"Loaded {allCardSprites.Count} unique card front sprites from Resources.");
     }
-
+	
+	// This server-only function is called automatically when a client connects.
     private void ServerOnClientConnected(ulong clientId)
     {
         if (!IsServer) return;
-
+		
+		// Add the new client to our player tracking dictionary if they aren't already in it.
+        // This prevents adding the same player twice.
         if (!playersReady.ContainsKey(clientId))
         {
             playersReady.Add(clientId, false);
         }
-
+		
+		// Assign the connecting player to an open player slot (P1 or P2).
         if (player1_clientId == 99) player1_clientId = clientId;
         else if (player2_clientId == 99) player2_clientId = clientId;
 
@@ -99,15 +108,20 @@ public class CardManager : NetworkBehaviour
             StartCoroutine(ServerGameSetup());
         }
     }
-
+	
+	// This is a Coroutine that orchestrates the start of the game on the server.
     IEnumerator ServerGameSetup()
-    {
+    {	
+    	// We wait one frame to ensure all clients are synchronized before we start spawning cards.
         yield return new WaitForEndOfFrame();
+        
+        // Now, in the next frame, we perform the setup sequence.
         InitializeDeck();
         ShuffleDeck();
         DealInitialHands(5);
     }
-
+	
+	// This server-only function creates a full 52-card deck.
     void InitializeDeck()
     {
         if (!IsServer) return;
@@ -122,14 +136,15 @@ public class CardManager : NetworkBehaviour
                     GameObject newCard = Instantiate(cardPrefab);
                     NetworkObject no = newCard.GetComponent<NetworkObject>();
                     no.Spawn(true);
-
+					
+					// Set the card's synchronized data (its permanent identity)
                     CardData cardData = newCard.GetComponent<CardData>();
                     cardData.Rank.Value = rank;
                     cardData.Suit.Value = suit;
                     newCard.name = cardSpriteName;
                     
                     deck.Add(newCard);
-                    // Pass empty strings for suit/rank since it's face down anyway
+                    // Tell all clients to visually place this new card in the deck area.
                     ParentAndAnimateCardClientRpc(new NetworkObjectReference(newCard), CardLocation.Deck, 0, "", "");
                 }
                 else
@@ -156,36 +171,41 @@ public class CardManager : NetworkBehaviour
         }
         Debug.Log("Deck has been shuffled correctly.");
     }
-
+	
+	// Deals a specified number of cards to each player at the start of the game.
     void DealInitialHands(int numCardsPerPlayer)
     {
         if (!IsServer) return;
 
-        // --- NEW DEBUG LOG ---
         // This will tell us if the deck has cards before we try to deal.
         Debug.Log($"Dealing hands. Deck count is: {deck.Count}");
 
         for (int i = 0; i < numCardsPerPlayer; i++)
-        {
+        {	
             if(deck.Count > 0) DrawCard(player1_clientId);
             if(deck.Count > 0) DrawCard(player2_clientId);
         }
     }
-
+	
+	// The server-side logic for moving one card from the deck to a player's hand.
     public void DrawCard(ulong targetClientId)
     {
         if (!IsServer || deck.Count == 0) return;
+        
+        // Take the top card from the deck list.
         GameObject cardToDraw = deck[0];
         deck.RemoveAt(0);
         
+        // Add the card to the server's logical hand list for the target player.
         List<GameObject> targetHand = (targetClientId == player1_clientId) ? player1Hand : player2Hand;
         targetHand.Add(cardToDraw);
 
         CardData cardData = cardToDraw.GetComponent<CardData>();
-        // Pass the card's actual suit and rank into the RPC
+        // Tell all clients to perform the visual action of moving the card.
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId, cardData.Suit.Value, cardData.Rank.Value);
     }
-
+	
+	// This server-only function validates and processes a "play card" action.
     public void PlayCardToDiscardPile(GameObject cardToPlay, ulong requestingClientId)
     {
         if (!IsServer) return;
@@ -195,22 +215,26 @@ public class CardManager : NetworkBehaviour
             Debug.LogError($"SECURITY VIOLATION: Client {requestingClientId} tried to play a card they do not own!");
             return;
         }
-
+		
+		// Update the server's authoritative lists.
         if (requestingClientId == player1_clientId) player1Hand.Remove(cardToPlay);
         else if (requestingClientId == player2_clientId) player2Hand.Remove(cardToPlay);
 
         discardPile.Add(cardToPlay);
-
+		
+		// Notify all clients of the visual change.
         CardData cardData = cardToPlay.GetComponent<CardData>();
-        // Pass the card's actual suit and rank into the RPC
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
     }
-
+	
+	// This public function is the entry point for the UI button's OnClick event.
     public void OnDrawCardButtonPressed()
-    {
+    {	
+	    // It immediately calls a ServerRpc to pass the request to the server.
         RequestDrawCardServerRpc();
     }
 
+    // This function is called by a client, but runs only on the server.
     [ServerRpc(RequireOwnership = false)]
     private void RequestDrawCardServerRpc(ServerRpcParams rpcParams = default)
     {
@@ -218,76 +242,87 @@ public class CardManager : NetworkBehaviour
         DrawCard(requestingClientId);
     }
     
-    // --- THIS IS THE MISSING ENUM ---
+    // A simple "enum" to create readable names for a card's possible locations.
     private enum CardLocation { Deck, PlayerHand, Discard }
 
+
+	// This is a command sent FROM the server TO all clients.
+    // Its job is to perform all the visual actions of moving a card.
     [ClientRpc]
     private void ParentAndAnimateCardClientRpc(NetworkObjectReference cardRef, CardLocation location, ulong ownerClientId, FixedString32Bytes suit, FixedString32Bytes rank, ClientRpcParams clientRpcParams = default)
-    {
+    {	
+    	// Find the specific card object on the local machine.
         if (!cardRef.TryGet(out NetworkObject cardNetworkObject)) return;
         
         GameObject card = cardNetworkObject.gameObject;
+        // Check if the card's owner is the player running on this machine.
         bool isMyCard = (ownerClientId == NetworkManager.Singleton.LocalClientId);
         
+        // Use the 'location' parameter to decide which action to take.
         switch (location)
         {
             case CardLocation.Deck:
-                card.transform.SetParent(deckDrawArea, false);
-                SetCardFace(card, false, "", ""); // Face down
+                card.transform.SetParent(deckDrawArea, false); // Moves card in Unity
+                SetCardFace(card, false, "", ""); // Deck cards are always face down.
                 break;
             case CardLocation.Discard:
-                card.GetComponent<PlayableCard>().ClearHandReference();
+                card.GetComponent<PlayableCard>().ClearHandReference(); // Make the card un-playable.
                 if(player1Hand.Contains(card)) player1Hand.Remove(card);
                 if(player2Hand.Contains(card)) player2Hand.Remove(card);
                 if(!discardPile.Contains(card)) discardPile.Add(card);
                 card.transform.SetParent(discardPileArea, false);
-                SetCardFace(card, true, suit, rank); // Face up, passing data
+                SetCardFace(card, true, suit, rank); // Discarded cards are always face up.
                 break;
             case CardLocation.PlayerHand:
+            	// Determine the correct hand area (bottom for me, top for opponent).
                 RectTransform targetArea = isMyCard ? player1HandArea : player2HandArea;
                 List<GameObject> targetHandList = isMyCard ? player1Hand : player2Hand;
                 if(!targetHandList.Contains(card)) targetHandList.Add(card);
                 card.GetComponent<PlayableCard>().SetHandReference(targetHandList);
                 card.transform.SetParent(targetArea, false);
-                SetCardFace(card, isMyCard, suit, rank); // Show face based on ownership, passing data
+                SetCardFace(card, isMyCard, suit, rank); // Only I see my card's face ownership, passing data
                 break;
         }
-
+		
+		// Reset the card's position and then update the layout of both hands.
         card.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
         ArrangeHand(player1Hand, player1HandArea);
         ArrangeHand(player2Hand, player2HandArea);
     }
     
+    // Sets the visible sprite for a card (either its front face or its back).
     private void SetCardFace(GameObject card, bool showFront, FixedString32Bytes suit, FixedString32Bytes rank)
-    {
+    {	
+  	 	// Default to showing the card back
         Sprite spriteToSet = cardBackSprite;
         if (showFront)
         {
-            // We construct the name from the parameters passed directly into the RPC
             string spriteName = $"{rank}_of_{suit}";
+            
+            // Safely try to get the sprite from our dictionary.
             if (!allCardSprites.TryGetValue(spriteName, out spriteToSet))
             {
                 Debug.LogError($"Could not find sprite named '{spriteName}' in the dictionary.");
                 spriteToSet = cardBackSprite; // Fallback
             }
         }
+        // Apply the determined sprite to the card's Image component
         card.GetComponent<Image>().sprite = spriteToSet;
     }
-    
-    
-
-    
-
+	
+	// A server-only helper function to check if a card is in a specific player's hand.
     private bool IsCardInPlayerHand(GameObject card, ulong targetClientId)
     {
         List<GameObject> targetHand = (targetClientId == player1_clientId) ? player1Hand : player2Hand;
         return targetHand != null && targetHand.Contains(card);
     }
     
+    // Arranges the cards in a hand visually to fan them out and center them.
     void ArrangeHand(List<GameObject> hand, RectTransform handArea)
     {
         if (hand == null || hand.Count == 0) return;
         
+        // Safety check to remove any null entries from the list (e.g., if a card was destroyed).
         hand.RemoveAll(item => item == null);
         if (hand.Count == 0) return;
 
@@ -296,11 +331,14 @@ public class CardManager : NetworkBehaviour
         float spacing = cardWidth * (1 - overlapAmount);
         float totalHandWidth = (hand.Count - 1) * spacing + cardWidth;
         float startX = -totalHandWidth / 2f;
+        
+        // --- Position Each Card ---
         for (int i = 0; i < hand.Count; i++)
         {
             if (hand[i] == null) continue; 
             RectTransform cardRect = hand[i].GetComponent<RectTransform>();
             cardRect.anchoredPosition = new Vector2(startX + (i * spacing), 0);
+            // SetAsLastSibling ensures cards on the right render on top of cards on the left.
             cardRect.SetAsLastSibling();
         }
     }
