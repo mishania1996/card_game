@@ -172,6 +172,52 @@ public class CardManager : NetworkBehaviour
         Debug.Log("Deck has been shuffled correctly.");
     }
 	
+	// Takes all but the top card of the discard pile and makes it the new deck.
+    private void ReshuffleDiscardPile()
+    {
+        if (discardPile.Count <= 1)
+        {
+            Debug.Log("Not enough cards in discard pile to reshuffle.");
+            return;
+        }
+
+        // Keep the top card of the discard pile.
+        GameObject topCard = discardPile[discardPile.Count - 1];
+        discardPile.RemoveAt(discardPile.Count - 1);
+
+        // Move the rest of the discard pile into the deck list.
+        deck.AddRange(discardPile);
+        
+        // Clear the discard pile and add the top card back.
+        discardPile.Clear();
+        discardPile.Add(topCard);
+
+        // Shuffle the newly created deck.
+        ShuffleDeck();
+
+        // Create a list of network references for all cards now in the deck.
+        List<NetworkObjectReference> newDeckRefs = new List<NetworkObjectReference>();
+        foreach(var card in deck)
+        {
+            newDeckRefs.Add(card);
+        }
+
+        // Send the list of new deck cards to the clients.
+        ReshuffleClientRpc(new NetworkObjectReference(topCard), newDeckRefs.ToArray());
+        
+    }
+    
+    // This coroutine adds a delay before triggering the reshuffle logic.
+    private IEnumerator ReshuffleWithDelay()
+    {
+        Debug.Log("Deck is empty. Reshuffling in 2 seconds...");
+        // This is the pause. It waits for 2 seconds in real-time.
+        yield return new WaitForSeconds(2f);
+        
+        // After the wait, call the actual reshuffle method.
+        ReshuffleDiscardPile();
+    }
+    
 	// Deals a specified number of cards to each player at the start of the game.
     void DealInitialHands(int numCardsPerPlayer)
     {
@@ -190,7 +236,14 @@ public class CardManager : NetworkBehaviour
 	// The server-side logic for moving one card from the deck to a player's hand.
     public void DrawCard(ulong targetClientId)
     {
-        if (!IsServer || deck.Count == 0) return;
+        if (!IsServer) return;
+        if (deck.Count == 0 && discardPile.Count <= 1) return;
+        if (deck.Count == 0)
+        {
+            // If it is, start the new coroutine to handle the delayed reshuffle.
+            StartCoroutine(ReshuffleWithDelay());
+            return;
+        }
         
         // Take the top card from the deck list.
         GameObject cardToDraw = deck[0];
@@ -203,6 +256,7 @@ public class CardManager : NetworkBehaviour
         CardData cardData = cardToDraw.GetComponent<CardData>();
         // Tell all clients to perform the visual action of moving the card.
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId, cardData.Suit.Value, cardData.Rank.Value);
+       
     }
 	
 	// This server-only function validates and processes a "play card" action.
@@ -225,6 +279,8 @@ public class CardManager : NetworkBehaviour
 		// Notify all clients of the visual change.
         CardData cardData = cardToPlay.GetComponent<CardData>();
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
+        
+ 
     }
 	
 	// This public function is the entry point for the UI button's OnClick event.
@@ -288,6 +344,41 @@ public class CardManager : NetworkBehaviour
         card.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
         ArrangeHand(player1Hand, player1HandArea);
         ArrangeHand(player2Hand, player2HandArea);
+    }
+    
+    [ClientRpc]
+    private void ReshuffleClientRpc(NetworkObjectReference topCardRef, NetworkObjectReference[] newDeckRefs)
+    {	
+    	// On each client, first clear the visual deck list.
+        deck.Clear();
+
+        // Repopulate the visual deck list and parent the cards to the deck area.
+        foreach (var cardRef in newDeckRefs)
+        {
+            if (cardRef.TryGet(out NetworkObject cardNetworkObject))
+            {
+                GameObject card = cardNetworkObject.gameObject;
+                deck.Add(card); // Add to client's visual deck list
+                card.transform.SetParent(deckDrawArea, false);
+                card.transform.localPosition = Vector3.zero; // Reset position
+                SetCardFace(card, false, "", ""); // Ensure it's face down
+            }
+        }
+    
+   
+        // On each client, clear the visual discard pile list.
+        discardPile.Clear();
+
+        // Find the top card and add it back to the visual discard pile list.
+        if (topCardRef.TryGet(out NetworkObject topCardNetworkObject))
+        {
+            discardPile.Add(topCardNetworkObject.gameObject);
+        }
+
+        // The deck is now visually empty, but that's okay. The server knows
+        // where the cards are, and the next DrawCard call will correctly
+        // move a "new" card from the deck area to a player's hand.
+        Debug.Log("Client is visually updating reshuffled discard pile.");
     }
     
     // Sets the visible sprite for a card (either its front face or its back).
