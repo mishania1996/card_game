@@ -275,7 +275,7 @@ public class CardManager : NetworkBehaviour
             return;
         }
 		
-        CardData cardToPlayData = cardToPlay.GetComponent<CardData>();
+        CardData cardData = cardToPlay.GetComponent<CardData>();
 
         CardData topCardData = null;
 
@@ -285,7 +285,7 @@ public class CardManager : NetworkBehaviour
         }
 
 
-        if (!gameFlow.IsValidPlay(cardToPlayData, topCardData))
+        if (!gameFlow.IsValidPlay(cardData, topCardData))
         {
             Debug.LogWarning("Invalid move attempted!");
             return;
@@ -296,25 +296,11 @@ public class CardManager : NetworkBehaviour
         discardPile.Add(cardToPlay);
 		
 		// Notify all clients of the visual change.
-        CardData cardData = cardToPlay.GetComponent<CardData>();
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
 
-        if (cardData.Rank.Value == "6")
-        {
-            ulong nextPlayerId = (requestingClientId == player1_clientId) ? player2_clientId : player1_clientId;
-            DrawCard(nextPlayerId, true);
-            return;
-        }
-        if (cardData.Rank.Value == "7")
-        {
-            ulong nextPlayerId = (requestingClientId == player1_clientId) ? player2_clientId : player1_clientId;
-            DrawCard(nextPlayerId, true);
-            DrawCard(nextPlayerId, true);
-            return;
-        }
-        
-        if (cardData.Rank.Value == "ace" || cardData.Rank.Value == "8") return ;
-        gameFlow.SwitchTurn(requestingClientId);
+        ulong nextPlayerId = (requestingClientId == player1_clientId) ? player2_clientId : player1_clientId;
+
+        gameFlow.ApplyPower(requestingClientId, nextPlayerId, cardData);
     }
 	
 	// This public function is the entry point for the UI button's OnClick event.
@@ -382,7 +368,7 @@ public class CardManager : NetworkBehaviour
     
     [ClientRpc]
     private void ReshuffleClientRpc(NetworkObjectReference topCardRef, NetworkObjectReference[] newDeckRefs)
-    {	
+    {
     	// On each client, first clear the visual deck list.
         deck.Clear();
 
