@@ -15,6 +15,8 @@ public class ConnectionManagerUI : MonoBehaviour
     [Header("In-Game Buttons")]
     public Button p1_DrawButton;
     public Button p2_DrawButton;
+    public Button p1_PassButton;
+    public Button p2_PassButton;
 
     private CardManager cardManager;
 
@@ -28,6 +30,8 @@ public class ConnectionManagerUI : MonoBehaviour
 
         if (p1_DrawButton != null) p1_DrawButton.gameObject.SetActive(false);
         if (p2_DrawButton != null) p2_DrawButton.gameObject.SetActive(false);
+        if (p1_PassButton != null) p1_PassButton.gameObject.SetActive(false);
+        if (p2_PassButton != null) p2_PassButton.gameObject.SetActive(false);
 
         hostButton.onClick.AddListener(() => StartHost());
         clientButton.onClick.AddListener(() => StartClient());
@@ -50,12 +54,16 @@ public class ConnectionManagerUI : MonoBehaviour
                 if (NetworkManager.Singleton.IsHost)
                 {
                     p1_DrawButton.gameObject.SetActive(true);
+                    p1_PassButton.gameObject.SetActive(true);
                     p2_DrawButton.gameObject.SetActive(false);
+                    p2_PassButton.gameObject.SetActive(false);
                 }
                 else
                 {
                     p1_DrawButton.gameObject.SetActive(false);
+                    p1_PassButton.gameObject.SetActive(false);
                     p2_DrawButton.gameObject.SetActive(true);
+                    p2_PassButton.gameObject.SetActive(true);
                 }
                 hasSetButtonVisibility = true;
             }
@@ -72,6 +80,13 @@ public class ConnectionManagerUI : MonoBehaviour
                     
                     p2_DrawButton.onClick.RemoveAllListeners();
                     p2_DrawButton.onClick.AddListener(() => cardManager.OnDrawCardButtonPressed());
+
+                    p1_PassButton.onClick.RemoveAllListeners();
+                    p1_PassButton.onClick.AddListener(() => cardManager.OnPassButtonPressed());
+
+                    p2_PassButton.onClick.RemoveAllListeners();
+                    p2_PassButton.onClick.AddListener(() => cardManager.OnPassButtonPressed());
+
 
                     hasHookedUpButtons = true;
                 }

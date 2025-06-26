@@ -19,6 +19,13 @@ public class GameFlow : NetworkBehaviour
     {
         if (!IsServer) return;
         CurrentPlayerId.Value = playerId;
+        if (playerId == cardManager.player1_clientId){
+            cardManager.player1_alreadyDrew = false;
+        }
+        else
+        {
+            cardManager.player2_alreadyDrew = false;
+        }
     }
 
     // This server-side method checks if a card can be legally played.

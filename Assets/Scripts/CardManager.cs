@@ -32,6 +32,9 @@ public class CardManager : NetworkBehaviour
     private Dictionary<ulong, bool> playersReady = new Dictionary<ulong, bool>();
     public ulong player1_clientId = 99;
     public ulong player2_clientId = 99;
+    public bool player1_alreadyDrew = false;
+    public bool player2_alreadyDrew = false;
+
     
     // Card definitions for building the deck
     private readonly List<string> suits = new List<string> { "hearts", "diamonds", "clubs", "spades" };
@@ -242,6 +245,10 @@ public class CardManager : NetworkBehaviour
             StartCoroutine(ReshuffleWithDelay());
             return;
         }
+
+        bool playerDrawnCondition = (targetClientId == player1_clientId) ? player1_alreadyDrew : player2_alreadyDrew;
+
+        if (!Forced && playerDrawnCondition) return;
         
         // Take the top card from the deck list.
         GameObject cardToDraw = deck[0];
@@ -254,7 +261,17 @@ public class CardManager : NetworkBehaviour
         CardData cardData = cardToDraw.GetComponent<CardData>();
         // Tell all clients to perform the visual action of moving the card.
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId, cardData.Suit.Value, cardData.Rank.Value);
-       
+
+        if (!Forced)
+        {
+            if (targetClientId == player1_clientId)
+            {
+                player1_alreadyDrew = true;
+            }
+            else{
+                player2_alreadyDrew = true;
+            }
+        }
     }
 	
 	// This server-only function validates and processes a "play card" action.
@@ -316,6 +333,26 @@ public class CardManager : NetworkBehaviour
     {
         ulong requestingClientId = rpcParams.Receive.SenderClientId;
         DrawCard(requestingClientId);
+    }
+
+    public void OnPassButtonPressed()
+    {
+        // It calls a ServerRpc to ask the server to switch the turn.
+        RequestPassTurnServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestPassTurnServerRpc(ServerRpcParams rpcParams = default)
+    {
+        ulong requestingClientId = rpcParams.Receive.SenderClientId;
+
+        // We only allow a player to pass on their own turn.
+        if (requestingClientId == gameFlow.CurrentPlayerId.Value)
+        {
+            Debug.Log($"Client {requestingClientId} passed their turn.");
+            // We can reuse the SwitchTurn method we already built in GameFlow!
+            gameFlow.SwitchTurn(requestingClientId);
+        }
     }
     
     // A simple "enum" to create readable names for a card's possible locations.
