@@ -35,7 +35,7 @@ public class CardManager : NetworkBehaviour
     
     // Card definitions for building the deck
     private readonly List<string> suits = new List<string> { "hearts", "diamonds", "clubs", "spades" };
-    private readonly List<string> ranks = new List<string> { "2", "3", "4", "5", "6", "7", "8", "9", "10", "jack", "queen", "king", "ace" };
+    private readonly List<string> ranks = new List<string> { "6", "7", "8", "9", "10", "jack", "queen", "king", "ace" };
 
 	// This is a special Netcode function called automatically on all clients and the host
     // when this NetworkObject is created on the network. It's the main entry point for setup.
@@ -43,8 +43,7 @@ public class CardManager : NetworkBehaviour
     {	
     	// This runs for everyone to ensure all players have the card art loaded.
         LoadCardSprites();
-		gameFlow= FindAnyObjectByType<GameFlow>();
-		
+		gameFlow = FindAnyObjectByType<GameFlow>();
 		// The following logic is for the server only.
         if (IsServer)
         {	
@@ -65,18 +64,6 @@ public class CardManager : NetworkBehaviour
         foreach (Sprite sprite in loadedSprites)
         {
             string spriteName = sprite.name;
-
-            // This logic cleans up the sprite names that Unity provides.
-            // For example, it turns "king_of_spades_0" into "king_of_spades"
-            int underscoreIndex = spriteName.LastIndexOf('_');
-            if (underscoreIndex > -1)
-            {
-                string suffix = spriteName.Substring(underscoreIndex + 1);
-                if(int.TryParse(suffix, out _))
-                {
-                    spriteName = spriteName.Substring(0, underscoreIndex);
-                }
-            }
             
             // This prevents adding the back card or duplicates to the front card dictionary
             if (spriteName != "back_card" && !allCardSprites.ContainsKey(spriteName))
@@ -124,7 +111,7 @@ public class CardManager : NetworkBehaviour
         gameFlow.SetPlayerTurn(player1_clientId);
     }
 	
-	// This server-only function creates a full 52-card deck.
+	// This server-only function creates a full 36-card deck.
     void InitializeDeck()
     {
         if (!IsServer) return;
@@ -289,9 +276,13 @@ public class CardManager : NetworkBehaviour
         }
 		
         CardData cardToPlayData = cardToPlay.GetComponent<CardData>();
-		GameObject topCardObject = discardPile.Count > 0 ?
-		discardPile[discardPile.Count - 1] : null;
-		CardData topCardData = topCardObject.GetComponent<CardData>();
+
+        CardData topCardData = null;
+
+		if (discardPile.Count > 0)
+        {
+            topCardData = discardPile[discardPile.Count - 1].GetComponent<CardData>();
+        }
 
 
         if (!gameFlow.IsValidPlay(cardToPlayData, topCardData))
@@ -307,7 +298,22 @@ public class CardManager : NetworkBehaviour
 		// Notify all clients of the visual change.
         CardData cardData = cardToPlay.GetComponent<CardData>();
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
+
+        if (cardData.Rank.Value == "6")
+        {
+            ulong nextPlayerId = (requestingClientId == player1_clientId) ? player2_clientId : player1_clientId;
+            DrawCard(nextPlayerId, true);
+            return;
+        }
+        if (cardData.Rank.Value == "7")
+        {
+            ulong nextPlayerId = (requestingClientId == player1_clientId) ? player2_clientId : player1_clientId;
+            DrawCard(nextPlayerId, true);
+            DrawCard(nextPlayerId, true);
+            return;
+        }
         
+        if (cardData.Rank.Value == "ace" || cardData.Rank.Value == "8") return ;
         gameFlow.SwitchTurn(requestingClientId);
     }
 	
