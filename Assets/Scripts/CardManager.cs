@@ -19,6 +19,7 @@ public class CardManager : NetworkBehaviour
 
     private Dictionary<string, Sprite> allCardSprites = new Dictionary<string, Sprite>();
     private Sprite cardBackSprite;
+    private GameFlow gameFlow;
 
     // Server-side authoritative lists
     private List<GameObject> deck = new List<GameObject>();
@@ -29,8 +30,8 @@ public class CardManager : NetworkBehaviour
 
     // Player tracking
     private Dictionary<ulong, bool> playersReady = new Dictionary<ulong, bool>();
-    private ulong player1_clientId = 99;
-    private ulong player2_clientId = 99;
+    public ulong player1_clientId = 99;
+    public ulong player2_clientId = 99;
     
     // Card definitions for building the deck
     private readonly List<string> suits = new List<string> { "hearts", "diamonds", "clubs", "spades" };
@@ -42,6 +43,7 @@ public class CardManager : NetworkBehaviour
     {	
     	// This runs for everyone to ensure all players have the card art loaded.
         LoadCardSprites();
+		gameFlow= FindAnyObjectByType<GameFlow>();
 		
 		// The following logic is for the server only.
         if (IsServer)
@@ -119,6 +121,7 @@ public class CardManager : NetworkBehaviour
         InitializeDeck();
         ShuffleDeck();
         DealInitialHands(5);
+        gameFlow.SetPlayerTurn(player1_clientId);
     }
 	
 	// This server-only function creates a full 52-card deck.
@@ -228,15 +231,23 @@ public class CardManager : NetworkBehaviour
 
         for (int i = 0; i < numCardsPerPlayer; i++)
         {	
-            if(deck.Count > 0) DrawCard(player1_clientId);
-            if(deck.Count > 0) DrawCard(player2_clientId);
+            // We now call DrawCard with Forced: true to bypass the turn check.
+            if(deck.Count > 0) DrawCard(player1_clientId, true);
+            if(deck.Count > 0) DrawCard(player2_clientId, true);
         }
     }
 	
 	// The server-side logic for moving one card from the deck to a player's hand.
-    public void DrawCard(ulong targetClientId)
+    public void DrawCard(ulong targetClientId, bool Forced = false)
     {
         if (!IsServer) return;
+
+        if (!Forced && targetClientId != gameFlow.CurrentPlayerId.Value)
+        {
+            Debug.LogWarning($"It is not Client {targetClientId}'s turn!");
+            return;
+        }
+
         if (deck.Count == 0 && discardPile.Count <= 1) return;
         if (deck.Count == 0)
         {
@@ -263,24 +274,41 @@ public class CardManager : NetworkBehaviour
     public void PlayCardToDiscardPile(GameObject cardToPlay, ulong requestingClientId)
     {
         if (!IsServer) return;
-
+        
+		// Check if it is the requesting player's turn before any other checks.
+        if (requestingClientId != gameFlow.CurrentPlayerId.Value)
+        {
+            Debug.LogWarning($"It is not Client {requestingClientId}'s turn!");
+            return;
+        }
+        
         if (!IsCardInPlayerHand(cardToPlay, requestingClientId))
         {
             Debug.LogError($"SECURITY VIOLATION: Client {requestingClientId} tried to play a card they do not own!");
             return;
         }
 		
-		// Update the server's authoritative lists.
-        if (requestingClientId == player1_clientId) player1Hand.Remove(cardToPlay);
-        else if (requestingClientId == player2_clientId) player2Hand.Remove(cardToPlay);
+        CardData cardToPlayData = cardToPlay.GetComponent<CardData>();
+		GameObject topCardObject = discardPile.Count > 0 ?
+		discardPile[discardPile.Count - 1] : null;
+		CardData topCardData = topCardObject.GetComponent<CardData>();
 
+
+        if (!gameFlow.IsValidPlay(cardToPlayData, topCardData))
+        {
+            Debug.LogWarning("Invalid move attempted!");
+            return;
+        }
+
+        List<GameObject> sourceHand = (requestingClientId == player1_clientId) ? player1Hand : player2Hand;
+        sourceHand.Remove(cardToPlay);
         discardPile.Add(cardToPlay);
 		
 		// Notify all clients of the visual change.
         CardData cardData = cardToPlay.GetComponent<CardData>();
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
         
- 
+        gameFlow.SwitchTurn(requestingClientId);
     }
 	
 	// This public function is the entry point for the UI button's OnClick event.
