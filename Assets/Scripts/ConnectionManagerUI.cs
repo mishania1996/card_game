@@ -52,6 +52,8 @@ public class ConnectionManagerUI : MonoBehaviour
         await UnityServices.InitializeAsync();
         await AuthenticationService.Instance.SignInAnonymouslyAsync();
         Debug.Log($"Signed in. Player ID: {AuthenticationService.Instance.PlayerId}");
+
+        NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
     }
 
     void Update()
@@ -94,7 +96,7 @@ public class ConnectionManagerUI : MonoBehaviour
                 {
                     p1_DrawButton.onClick.RemoveAllListeners();
                     p1_DrawButton.onClick.AddListener(() => cardManager.OnDrawCardButtonPressed());
-                    
+
                     p2_DrawButton.onClick.RemoveAllListeners();
                     p2_DrawButton.onClick.AddListener(() => cardManager.OnDrawCardButtonPressed());
 
@@ -111,9 +113,12 @@ public class ConnectionManagerUI : MonoBehaviour
         }
     }
 
+
     private async void OnHostButtonClicked()
     {
         connectingStatusPanel.SetActive(true);
+        connectionPanel.SetActive(false);
+
         try
         {
             // 1. Create a Relay allocation (1 is the number of players besides the host)
@@ -130,7 +135,7 @@ public class ConnectionManagerUI : MonoBehaviour
 
             // 4. Start the host
             NetworkManager.Singleton.StartHost();
-            ShowGameUI(); // Call your existing method to switch panels
+            // Call your existing method to switch panels
         }
         catch (RelayServiceException e)
         {
@@ -141,6 +146,8 @@ public class ConnectionManagerUI : MonoBehaviour
 
     private async void OnClientButtonClicked()
     {
+
+
         string joinCode = joinCodeInputField.text;
         if (string.IsNullOrWhiteSpace(joinCode))
         {
@@ -148,7 +155,6 @@ public class ConnectionManagerUI : MonoBehaviour
             return;
         }
 
-        connectingStatusPanel.SetActive(true);
         try
         {
             // 1. Join the host's allocation using the join code
@@ -161,7 +167,6 @@ public class ConnectionManagerUI : MonoBehaviour
 
             // 3. Start the client
             NetworkManager.Singleton.StartClient();
-            ShowGameUI(); // Call your existing method to switch panels
         }
         catch (RelayServiceException e)
         {
@@ -170,6 +175,15 @@ public class ConnectionManagerUI : MonoBehaviour
         }
     }
 
+    private void HandleClientConnected(ulong clientId)
+    {
+        if (NetworkManager.Singleton.ConnectedClients.Count == 2)
+        {
+            Debug.Log("Connection successful! Showing Game UI.");
+            ShowGameUI();
+        }
+
+    }
     
     // This method now only handles switching panels.
     private void ShowGameUI()
