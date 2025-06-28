@@ -14,6 +14,13 @@ public class CardManager : NetworkBehaviour
     public RectTransform player1HandArea;
     public RectTransform player2HandArea;
 
+    [Header("Suit Choice UI")]
+    public GameObject suitChoicePanel;
+    public Button heartsButton;
+    public Button diamondsButton;
+    public Button clubsButton;
+    public Button spadesButton;
+
     [Header("Prefabs")]
     public GameObject cardPrefab;
 
@@ -489,5 +496,31 @@ public class CardManager : NetworkBehaviour
             // SetAsLastSibling ensures cards on the right render on top of cards on the left.
             cardRect.SetAsLastSibling();
         }
+    }
+
+    public void ShowSuitChoicePanel()
+    {
+        suitChoicePanel.SetActive(true);
+
+        // Set up the button listeners. They only need to be set up once.
+        // We remove any old listeners first to be safe.
+        heartsButton.onClick.RemoveAllListeners();
+        diamondsButton.onClick.RemoveAllListeners();
+        clubsButton.onClick.RemoveAllListeners();
+        spadesButton.onClick.RemoveAllListeners();
+
+        heartsButton.onClick.AddListener(() => { OnSuitChosen("hearts"); });
+        diamondsButton.onClick.AddListener(() => { OnSuitChosen("diamonds"); });
+        clubsButton.onClick.AddListener(() => { OnSuitChosen("clubs"); });
+        spadesButton.onClick.AddListener(() => { OnSuitChosen("spades"); });
+    }
+
+    private void OnSuitChosen(string chosenSuit)
+    {
+        // Hide the panel immediately after a choice is made
+        suitChoicePanel.SetActive(false);
+
+        // Call a new ServerRpc on the GameFlow script to tell the server our choice
+        gameFlow.SetActiveSuitServerRpc(chosenSuit, NetworkManager.Singleton.LocalClientId);
     }
 }

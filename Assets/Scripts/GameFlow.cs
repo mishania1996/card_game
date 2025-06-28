@@ -1,10 +1,12 @@
 using Unity.Netcode;
 using UnityEngine;
+using Unity.Collections;
 
 public class GameFlow : NetworkBehaviour
 {
     // This variable will be synced to all players. It holds the ID of the client whose turn it is.
     public NetworkVariable<ulong> CurrentPlayerId = new NetworkVariable<ulong>();
+    public NetworkVariable<FixedString32Bytes> ActiveSuit = new NetworkVariable<FixedString32Bytes>();
 
     private CardManager cardManager;
 
@@ -12,6 +14,23 @@ public class GameFlow : NetworkBehaviour
     {
         base.OnNetworkSpawn(); // It's good practice to call the base method.
         cardManager = FindAnyObjectByType<CardManager>();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SetActiveSuitServerRpc(string chosenSuit, ulong actingPlayerId)
+    {
+        Debug.Log($"Player {actingPlayerId} chose {chosenSuit} as the new suit.");
+        ActiveSuit.Value = chosenSuit;
+
+        // Now that the choice is made, we can switch the turn.
+        SwitchTurn(actingPlayerId);
+    }
+
+    [ClientRpc]
+    public void PromptForSuitChoiceClientRpc(ClientRpcParams clientRpcParams = default)
+    {
+        // This will run on the client who played the Jack
+        cardManager.ShowSuitChoicePanel();
     }
 
     // A server-only function to set the turn to a specific player.
@@ -36,13 +55,24 @@ public class GameFlow : NetworkBehaviour
             return true;
         }
 
+        if (cardToPlay.Rank.Value == "jack")
+        {
+            return true;
+        }
+
+        if (topOfDiscard.Rank.Value == "jack")
+        {
+            // The play is only valid if the played card's suit matches the ActiveSuit
+            return cardToPlay.Suit.Value == ActiveSuit.Value;
+        }
+
         // The move is valid if the suits match OR the ranks match.
         if (cardToPlay.Suit.Value == topOfDiscard.Suit.Value || cardToPlay.Rank.Value == topOfDiscard.Rank.Value)
         {
             return true;
         }
 
-        if (topOfDiscard.Rank.Value == "8" || cardToPlay.Rank.Value == "jack")
+        if (topOfDiscard.Rank.Value == "8")
         {
             return true;
         }
@@ -84,6 +114,19 @@ public class GameFlow : NetworkBehaviour
                 cardManager.DrawCard(actedPlayer, true);
             }
             return;
+        }
+
+        if (cardData.Rank.Value == "jack")
+        {
+            ClientRpcParams clientRpcParams = new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams
+                {
+                    TargetClientIds = new ulong[] { actingPlayer }
+                }
+            };
+            PromptForSuitChoiceClientRpc(clientRpcParams);
+            return; // Stop here until the player makes a choice
         }
 
         if (cardData.Rank.Value == "ace" || cardData.Rank.Value == "8") return ;
