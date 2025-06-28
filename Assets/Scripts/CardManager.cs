@@ -39,8 +39,7 @@ public class CardManager : NetworkBehaviour
     private Dictionary<ulong, bool> playersReady = new Dictionary<ulong, bool>();
     public ulong player1_clientId = 99;
     public ulong player2_clientId = 99;
-    public bool player1_alreadyDrew = false;
-    public bool player2_alreadyDrew = false;
+    public bool active_player_has_drawn = false;
 
     
     // Card definitions for building the deck
@@ -253,9 +252,9 @@ public class CardManager : NetworkBehaviour
             return;
         }
 
-        bool playerDrawnCondition = (targetClientId == player1_clientId) ? player1_alreadyDrew : player2_alreadyDrew;
 
-        if (!Forced && playerDrawnCondition) return;
+
+        if (!Forced && active_player_has_drawn) return;
         
         // Take the top card from the deck list.
         GameObject cardToDraw = deck[0];
@@ -269,16 +268,7 @@ public class CardManager : NetworkBehaviour
         // Tell all clients to perform the visual action of moving the card.
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId, cardData.Suit.Value, cardData.Rank.Value);
 
-        if (!Forced)
-        {
-            if (targetClientId == player1_clientId)
-            {
-                player1_alreadyDrew = true;
-            }
-            else{
-                player2_alreadyDrew = true;
-            }
-        }
+        if (!Forced) active_player_has_drawn = true;
     }
 	
 	// This server-only function validates and processes a "play card" action.
@@ -354,12 +344,20 @@ public class CardManager : NetworkBehaviour
         ulong requestingClientId = rpcParams.Receive.SenderClientId;
 
         // We only allow a player to pass on their own turn.
+        if (!active_player_has_drawn)
+        {
+            Debug.Log($"Player must draw a card first");
+            // We can reuse the SwitchTurn method we already built in GameFlow!
+            return;
+        }
+
         if (requestingClientId == gameFlow.CurrentPlayerId.Value)
         {
             Debug.Log($"Client {requestingClientId} passed their turn.");
             // We can reuse the SwitchTurn method we already built in GameFlow!
             gameFlow.SwitchTurn(requestingClientId);
         }
+
     }
     
     // A simple "enum" to create readable names for a card's possible locations.
