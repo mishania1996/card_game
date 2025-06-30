@@ -24,7 +24,7 @@ public class GameFlow : NetworkBehaviour
         ActiveSuit.Value = chosenSuit;
 
         // Now that the choice is made, we can switch the turn.
-        SwitchTurn(actingPlayerId);
+        SetPlayerTurn(GetNextPlayerInTurn(actingPlayerId));
     }
 
     [ClientRpc]
@@ -84,6 +84,21 @@ public class GameFlow : NetworkBehaviour
         return turnOrder[nextPlayerIndex];
     }
 
+    public ulong GetNextNextPlayerInTurn(ulong currentPlayerId)
+    {
+        int currentPlayerIndex = turnOrder.IndexOf(currentPlayerId);
+        int nextPlayerIndex = (currentPlayerIndex + 2) % turnOrder.Count;
+        return turnOrder[nextPlayerIndex];
+    }
+
+    public ulong GetPrevPlayerInTurn(ulong currentPlayerId)
+    {
+        int currentPlayerIndex = turnOrder.IndexOf(currentPlayerId);
+        int nextPlayerIndex = (currentPlayerIndex - 1) % turnOrder.Count;
+        return turnOrder[nextPlayerIndex];
+    }
+
+
     public void SwitchTurn(ulong playerWhoJustPlayed)
     {
         if (!IsServer) return;
@@ -133,7 +148,7 @@ public class GameFlow : NetworkBehaviour
     }
 
 
-    public void ApplyPower(ulong actingPlayer, ulong actedPlayer, CardData cardData)
+    public void ApplyPower(ulong actingPlayer, CardData cardData)
     {
         if ((cardData.Rank.Value == "queen" || cardData.Rank.Value == "jack")  && cardManager.players[actingPlayer].Hand.Count == 0 )
         {
@@ -143,22 +158,47 @@ public class GameFlow : NetworkBehaviour
 
         if (cardData.Rank.Value == "6")
         {
-            cardManager.DrawCard(actedPlayer, true);
+            ulong actedPlayerId = GetPrevPlayerInTurn(actingPlayer);
+            cardManager.DrawCard(actedPlayerId, true);
+            if (cardManager.NumberOfPlayers > 2)
+            {
+                SetPlayerTurn(GetNextPlayerInTurn(actingPlayer));
+                return;
+            }
+            if(cardManager.players[actingPlayer].Hand.Count == 0) cardManager.active_player_has_drawn = false;
             return;
         }
         if (cardData.Rank.Value == "7")
         {
-            cardManager.DrawCard(actedPlayer, true);
-            cardManager.DrawCard(actedPlayer, true);
+            ulong actedPlayerId = GetNextPlayerInTurn(actingPlayer);
+            cardManager.DrawCard(actedPlayerId, true);
+            cardManager.DrawCard(actedPlayerId, true);
+
+            if (cardManager.NumberOfPlayers > 2)
+            {
+                SetPlayerTurn(GetNextNextPlayerInTurn(actingPlayer));
+                return;
+            }
+
+            if(cardManager.players[actingPlayer].Hand.Count == 0) cardManager.active_player_has_drawn = false;
             return;
         }
 
         if (cardData.Rank.Value == "9" && cardData.Suit.Value == "diamonds")
         {
+            ulong actedPlayerId = GetNextPlayerInTurn(actingPlayer);
             for (int i = 0; i < 5; i++)
             {
-                cardManager.DrawCard(actedPlayer, true);
+                cardManager.DrawCard(actedPlayerId, true);
             }
+
+            if (cardManager.NumberOfPlayers > 2)
+            {
+                SetPlayerTurn(GetNextNextPlayerInTurn(actingPlayer));
+                return;
+            }
+
+            if(cardManager.players[actingPlayer].Hand.Count == 0) cardManager.active_player_has_drawn = false;
             return;
         }
 
@@ -175,8 +215,19 @@ public class GameFlow : NetworkBehaviour
             return; // Stop here until the player makes a choice
         }
 
-        if (cardData.Rank.Value == "ace" || cardData.Rank.Value == "8") return ;
-        SwitchTurn(actingPlayer);
+        if (cardData.Rank.Value == "ace")
+        {
+            SetPlayerTurn(GetNextNextPlayerInTurn(actingPlayer));
+            return;
+        }
+
+        if (cardData.Rank.Value == "8")
+        {
+            if(cardManager.players[actingPlayer].Hand.Count == 0) cardManager.active_player_has_drawn = false;
+            return;
+        }
+
+        SetPlayerTurn(GetNextPlayerInTurn(actingPlayer));
     }
 
     [ClientRpc]

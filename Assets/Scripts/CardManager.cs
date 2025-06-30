@@ -361,9 +361,7 @@ public class CardManager : NetworkBehaviour
 		// Notify all clients of the visual change.
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
 
-
-        ulong nextPlayerId = gameFlow.GetNextPlayerInTurn(requestingClientId);
-        gameFlow.ApplyPower(requestingClientId, nextPlayerId, cardData);
+        gameFlow.ApplyPower(requestingClientId, cardData);
     }
 	
 	// This public function is the entry point for the UI button's OnClick event.
@@ -396,15 +394,13 @@ public class CardManager : NetworkBehaviour
         if (!active_player_has_drawn)
         {
             Debug.Log($"Player must draw a card first");
-            // We can reuse the SwitchTurn method we already built in GameFlow!
             return;
         }
 
         if (requestingClientId == gameFlow.CurrentPlayerId.Value)
         {
             Debug.Log($"Client {requestingClientId} passed their turn.");
-            // We can reuse the SwitchTurn method we already built in GameFlow!
-            gameFlow.SwitchTurn(requestingClientId);
+            gameFlow.SetPlayerTurn(gameFlow.GetNextPlayerInTurn(requestingClientId));
         }
 
     }
