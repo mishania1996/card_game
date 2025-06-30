@@ -29,7 +29,8 @@ public class ConnectionManagerUI : MonoBehaviour
     public Button p1_PassButton;
     public Button p2_PassButton;
 
-    private CardManager cardManager;
+    [Header("Scripts")]
+    public CardManager cardManager;
 
     private bool hasSetButtonVisibility = false;
     private bool hasHookedUpButtons = false;
@@ -52,8 +53,6 @@ public class ConnectionManagerUI : MonoBehaviour
         await UnityServices.InitializeAsync();
         await AuthenticationService.Instance.SignInAnonymouslyAsync();
         Debug.Log($"Signed in. Player ID: {AuthenticationService.Instance.PlayerId}");
-
-        NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
     }
 
     void Update()
@@ -121,8 +120,12 @@ public class ConnectionManagerUI : MonoBehaviour
 
         try
         {
-            // 1. Create a Relay allocation (1 is the number of players besides the host)
-            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(1);
+            int maxPlayers = cardManager.NumberOfPlayers - 1;
+
+
+            // 1. Create a Relay allocation
+
+            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers);
 
             // 2. Get the join code for the allocation
             string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
@@ -175,18 +178,10 @@ public class ConnectionManagerUI : MonoBehaviour
         }
     }
 
-    private void HandleClientConnected(ulong clientId)
-    {
-        if (NetworkManager.Singleton.ConnectedClients.Count == 2)
-        {
-            Debug.Log("Connection successful! Showing Game UI.");
-            ShowGameUI();
-        }
 
-    }
     
     // This method now only handles switching panels.
-    private void ShowGameUI()
+    public void ShowGameUI()
     {
         if (connectingStatusPanel != null) connectingStatusPanel.SetActive(false);
 

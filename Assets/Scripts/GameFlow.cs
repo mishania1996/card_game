@@ -28,6 +28,14 @@ public class GameFlow : NetworkBehaviour
     }
 
     [ClientRpc]
+    public void StartGameClientRpc()
+    {
+        // Find the ConnectionManagerUI in the scene and tell it to show the game panel.
+        FindAnyObjectByType<ConnectionManagerUI>().ShowGameUI();
+    }
+
+
+    [ClientRpc]
     public void PromptForSuitChoiceClientRpc(ClientRpcParams clientRpcParams = default)
     {
         // This will run on the client who played the Jack

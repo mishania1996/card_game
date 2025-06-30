@@ -8,7 +8,7 @@ using Unity.Collections;
 
 public class CardManager : NetworkBehaviour
 {   [Header("Game Settings")]
-    public int NumberOfPlayers = 2;
+    public int NumberOfPlayers = 3;
     [Header("UI Areas")]
     public RectTransform deckDrawArea;
     public RectTransform discardPileArea;
@@ -102,6 +102,7 @@ public class CardManager : NetworkBehaviour
 
         if (players.Count == NumberOfPlayers)
         {
+            gameFlow.StartGameClientRpc();
             // Pass the list of connected player IDs to the GameFlow
             List<ulong> connectedPlayerIds = new List<ulong>(players.Keys);
             gameFlow.StartGameWithPlayers(connectedPlayerIds);
