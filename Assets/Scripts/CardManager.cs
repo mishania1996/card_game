@@ -7,12 +7,17 @@ using System.Linq;
 using Unity.Collections; 
 
 public class CardManager : NetworkBehaviour
-{
+{   [Header("Game Settings")]
+    public int NumberOfPlayers = 2;
     [Header("UI Areas")]
     public RectTransform deckDrawArea;
     public RectTransform discardPileArea;
-    public RectTransform player1HandArea;
-    public RectTransform player2HandArea;
+    public List<RectTransform> playerHandAreas;
+    public GameObject gamePanel;
+
+    [Header("Game Over UI")]
+    public GameObject winScreenPanel;
+    public GameObject loseScreenPanel;
 
     [Header("Suit Choice UI")]
     public GameObject suitChoicePanel;
@@ -31,23 +36,19 @@ public class CardManager : NetworkBehaviour
     // Server-side authoritative lists
     private List<GameObject> deck = new List<GameObject>();
     private List<GameObject> discardPile = new List<GameObject>();
-    // Client-side visual lists
-    private List<GameObject> player1Hand = new List<GameObject>();
-    private List<GameObject> player2Hand = new List<GameObject>();
 
     // Player tracking
-    private Dictionary<ulong, bool> playersReady = new Dictionary<ulong, bool>();
-    public ulong player1_clientId = 99;
-    public ulong player2_clientId = 99;
+    public Dictionary<ulong, PlayerData> players = new Dictionary<ulong, PlayerData>();
     public bool active_player_has_drawn = false;
+    // This will only hold cards for the local player running the game.
+    private List<GameObject> myLocalHand = new List<GameObject>();
+    private int myPlayerIndex = -1;
 
-    
     // Card definitions for building the deck
     private readonly List<string> suits = new List<string> { "hearts", "diamonds", "clubs", "spades" };
     private readonly List<string> ranks = new List<string> { "6", "7", "8", "9", "10", "jack", "queen", "king", "ace" };
 
-	// This is a special Netcode function called automatically on all clients and the host
-    // when this NetworkObject is created on the network. It's the main entry point for setup.
+	// This is a special Netcode function called automatically on all clients and the host when this NetworkObject is created on the network. It's the main entry point for setup.
     public override void OnNetworkSpawn()
     {	
     	// This runs for everyone to ensure all players have the card art loaded.
@@ -69,18 +70,17 @@ public class CardManager : NetworkBehaviour
 
         Sprite[] loadedSprites = Resources.LoadAll<Sprite>("CardSprites");
         allCardSprites.Clear();
-        
+
         foreach (Sprite sprite in loadedSprites)
         {
             string spriteName = sprite.name;
-            
-            // This prevents adding the back card or duplicates to the front card dictionary
+
             if (spriteName != "back_card" && !allCardSprites.ContainsKey(spriteName))
             {
                 allCardSprites.Add(spriteName, sprite);
             }
         }
-        
+
         Debug.Log($"Loaded {allCardSprites.Count} unique card front sprites from Resources.");
     }
 	
@@ -89,22 +89,30 @@ public class CardManager : NetworkBehaviour
     {
         if (!IsServer) return;
 		
+        if (players.Count >= NumberOfPlayers) return;
 		// Add the new client to our player tracking dictionary if they aren't already in it.
         // This prevents adding the same player twice.
-        if (!playersReady.ContainsKey(clientId))
-        {
-            playersReady.Add(clientId, false);
-        }
-		
-		// Assign the connecting player to an open player slot (P1 or P2).
-        if (player1_clientId == 99) player1_clientId = clientId;
-        else if (player2_clientId == 99) player2_clientId = clientId;
+        if (players.ContainsKey(clientId)) return;
 
-        if (playersReady.Count == 2)
+        RectTransform handArea = playerHandAreas[players.Count];
+        players.Add(clientId, new PlayerData(clientId, handArea, players.Count));
+
+        Debug.Log($"Player with ClientId {clientId} connected. Total players: {players.Count}");
+
+        if (players.Count == NumberOfPlayers)
         {
-            Debug.Log($"Two players connected. P1 is Client {player1_clientId}, P2 is Client {player2_clientId}. Starting game setup.");
+            // Pass the list of connected player IDs to the GameFlow
+            List<ulong> connectedPlayerIds = new List<ulong>(players.Keys);
+            gameFlow.StartGameWithPlayers(connectedPlayerIds);
+
             StartCoroutine(ServerGameSetup());
         }
+
+    }
+
+    public void SetLocalPlayerInfo(int playerIndex)
+    {
+        myPlayerIndex = playerIndex;
     }
 	
 	// This is a Coroutine that orchestrates the start of the game on the server.
@@ -117,7 +125,6 @@ public class CardManager : NetworkBehaviour
         InitializeDeck();
         ShuffleDeck();
         DealInitialHands(5);
-        gameFlow.SetPlayerTurn(player1_clientId);
     }
 	
 	// This server-only function creates a full 36-card deck.
@@ -205,6 +212,41 @@ public class CardManager : NetworkBehaviour
         ReshuffleClientRpc(new NetworkObjectReference(topCard), newDeckRefs.ToArray());
         
     }
+
+    [ClientRpc]
+    private void ReshuffleClientRpc(NetworkObjectReference topCardRef, NetworkObjectReference[] newDeckRefs)
+    {
+    	// On each client, first clear the visual deck list.
+        deck.Clear();
+
+        // Repopulate the visual deck list and parent the cards to the deck area.
+        foreach (var cardRef in newDeckRefs)
+        {
+            if (cardRef.TryGet(out NetworkObject cardNetworkObject))
+            {
+                GameObject card = cardNetworkObject.gameObject;
+                deck.Add(card); // Add to client's visual deck list
+                card.transform.SetParent(deckDrawArea, false);
+                card.transform.localPosition = Vector3.zero; // Reset position
+                SetCardFace(card, false, "", ""); // Ensure it's face down
+            }
+        }
+
+
+        // On each client, clear the visual discard pile list.
+        discardPile.Clear();
+
+        // Find the top card and add it back to the visual discard pile list.
+        if (topCardRef.TryGet(out NetworkObject topCardNetworkObject))
+        {
+            discardPile.Add(topCardNetworkObject.gameObject);
+        }
+
+        // The deck is now visually empty, but that's okay. The server knows
+        // where the cards are, and the next DrawCard call will correctly
+        // move a "new" card from the deck area to a player's hand.
+        Debug.Log("Client is visually updating reshuffled discard pile.");
+    }
     
     // This coroutine adds a delay before triggering the reshuffle logic.
     private IEnumerator ReshuffleWithDelay()
@@ -227,9 +269,10 @@ public class CardManager : NetworkBehaviour
 
         for (int i = 0; i < numCardsPerPlayer; i++)
         {	
-            // We now call DrawCard with Forced: true to bypass the turn check.
-            if(deck.Count > 0) DrawCard(player1_clientId, true);
-            if(deck.Count > 0) DrawCard(player2_clientId, true);
+            foreach (ulong clientId in players.Keys)
+            {
+                if (deck.Count > 0) DrawCard(clientId, true);
+            }
         }
     }
 	
@@ -237,13 +280,16 @@ public class CardManager : NetworkBehaviour
     public void DrawCard(ulong targetClientId, bool Forced = false)
     {
         if (!IsServer) return;
-
         if (!Forced && targetClientId != gameFlow.CurrentPlayerId.Value)
         {
             Debug.LogWarning($"It is not Client {targetClientId}'s turn!");
             return;
         }
-
+        if (!players.ContainsKey(targetClientId))
+        {
+            Debug.LogError($"Player with ID {targetClientId} not found.");
+            return;
+        }
         if (deck.Count == 0 && discardPile.Count <= 1) return;
         if (deck.Count == 0)
         {
@@ -261,12 +307,14 @@ public class CardManager : NetworkBehaviour
         deck.RemoveAt(0);
         
         // Add the card to the server's logical hand list for the target player.
-        List<GameObject> targetHand = (targetClientId == player1_clientId) ? player1Hand : player2Hand;
-        targetHand.Add(cardToDraw);
+        PlayerData targetPlayer = players[targetClientId];
+        targetPlayer.Hand.Add(cardToDraw);
 
         CardData cardData = cardToDraw.GetComponent<CardData>();
+        int ownerPlayerIndex = targetPlayer.PlayerIndex;
+
         // Tell all clients to perform the visual action of moving the card.
-        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId, cardData.Suit.Value, cardData.Rank.Value);
+        ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToDraw), CardLocation.PlayerHand, targetClientId, cardData.Suit.Value, cardData.Rank.Value, ownerPlayerIndex);
 
         if (!Forced) active_player_has_drawn = true;
     }
@@ -283,7 +331,7 @@ public class CardManager : NetworkBehaviour
             return;
         }
         
-        if (!IsCardInPlayerHand(cardToPlay, requestingClientId))
+        if (!players[requestingClientId].Hand.Contains(cardToPlay))
         {
             Debug.LogError($"SECURITY VIOLATION: Client {requestingClientId} tried to play a card they do not own!");
             return;
@@ -305,15 +353,14 @@ public class CardManager : NetworkBehaviour
             return;
         }
 
-        List<GameObject> sourceHand = (requestingClientId == player1_clientId) ? player1Hand : player2Hand;
-        sourceHand.Remove(cardToPlay);
+        players[requestingClientId].Hand.Remove(cardToPlay);
         discardPile.Add(cardToPlay);
 		
 		// Notify all clients of the visual change.
         ParentAndAnimateCardClientRpc(new NetworkObjectReference(cardToPlay), CardLocation.Discard, 0, cardData.Suit.Value, cardData.Rank.Value);
 
-        ulong nextPlayerId = (requestingClientId == player1_clientId) ? player2_clientId : player1_clientId;
 
+        ulong nextPlayerId = gameFlow.GetNextPlayerInTurn(requestingClientId);
         gameFlow.ApplyPower(requestingClientId, nextPlayerId, cardData);
     }
 	
@@ -367,7 +414,7 @@ public class CardManager : NetworkBehaviour
 	// This is a command sent FROM the server TO all clients.
     // Its job is to perform all the visual actions of moving a card.
     [ClientRpc]
-    private void ParentAndAnimateCardClientRpc(NetworkObjectReference cardRef, CardLocation location, ulong ownerClientId, FixedString32Bytes suit, FixedString32Bytes rank, ClientRpcParams clientRpcParams = default)
+    private void ParentAndAnimateCardClientRpc(NetworkObjectReference cardRef, CardLocation location, ulong ownerClientId, FixedString32Bytes suit, FixedString32Bytes rank, int ownerPlayerIndex = -1, ClientRpcParams clientRpcParams = default)
     {	
     	// Find the specific card object on the local machine.
         if (!cardRef.TryGet(out NetworkObject cardNetworkObject)) return;
@@ -384,64 +431,40 @@ public class CardManager : NetworkBehaviour
                 SetCardFace(card, false, "", ""); // Deck cards are always face down.
                 break;
             case CardLocation.Discard:
-                card.GetComponent<PlayableCard>().ClearHandReference(); // Make the card un-playable.
-                if(player1Hand.Contains(card)) player1Hand.Remove(card);
-                if(player2Hand.Contains(card)) player2Hand.Remove(card);
-                if(!discardPile.Contains(card)) discardPile.Add(card);
+                if (myLocalHand.Contains(card)) myLocalHand.Remove(card);
+                card.GetComponent<PlayableCard>().ClearHandReference();
                 card.transform.SetParent(discardPileArea, false);
                 SetCardFace(card, true, suit, rank); // Discarded cards are always face up.
                 break;
             case CardLocation.PlayerHand:
-            	// Determine the correct hand area (bottom for me, top for opponent).
-                RectTransform targetArea = isMyCard ? player1HandArea : player2HandArea;
-                List<GameObject> targetHandList = isMyCard ? player1Hand : player2Hand;
-                if(!targetHandList.Contains(card)) targetHandList.Add(card);
-                card.GetComponent<PlayableCard>().SetHandReference(targetHandList);
+            	// Determine the correct hand area
+                int uiSlotIndex = (ownerPlayerIndex - myPlayerIndex + NumberOfPlayers) % NumberOfPlayers;
+                RectTransform targetArea = playerHandAreas[uiSlotIndex];
+
+                if (isMyCard)
+                {
+                    myLocalHand.Add(card);
+                    card.GetComponent<PlayableCard>().SetHandReference(myLocalHand);
+                }
+                else
+                {
+                    card.GetComponent<PlayableCard>().ClearHandReference();
+                }
+
                 card.transform.SetParent(targetArea, false);
-                SetCardFace(card, isMyCard, suit, rank); // Only I see my card's face ownership, passing data
+                SetCardFace(card, isMyCard, suit, rank);
                 break;
         }
 		
 		// Reset the card's position and then update the layout of both hands.
         card.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
-        ArrangeHand(player1Hand, player1HandArea);
-        ArrangeHand(player2Hand, player2HandArea);
+        foreach (var area in playerHandAreas)
+        {
+            ArrangeHand(area);
+        }
     }
     
-    [ClientRpc]
-    private void ReshuffleClientRpc(NetworkObjectReference topCardRef, NetworkObjectReference[] newDeckRefs)
-    {
-    	// On each client, first clear the visual deck list.
-        deck.Clear();
 
-        // Repopulate the visual deck list and parent the cards to the deck area.
-        foreach (var cardRef in newDeckRefs)
-        {
-            if (cardRef.TryGet(out NetworkObject cardNetworkObject))
-            {
-                GameObject card = cardNetworkObject.gameObject;
-                deck.Add(card); // Add to client's visual deck list
-                card.transform.SetParent(deckDrawArea, false);
-                card.transform.localPosition = Vector3.zero; // Reset position
-                SetCardFace(card, false, "", ""); // Ensure it's face down
-            }
-        }
-    
-   
-        // On each client, clear the visual discard pile list.
-        discardPile.Clear();
-
-        // Find the top card and add it back to the visual discard pile list.
-        if (topCardRef.TryGet(out NetworkObject topCardNetworkObject))
-        {
-            discardPile.Add(topCardNetworkObject.gameObject);
-        }
-
-        // The deck is now visually empty, but that's okay. The server knows
-        // where the cards are, and the next DrawCard call will correctly
-        // move a "new" card from the deck area to a player's hand.
-        Debug.Log("Client is visually updating reshuffled discard pile.");
-    }
     
     // Sets the visible sprite for a card (either its front face or its back).
     private void SetCardFace(GameObject card, bool showFront, FixedString32Bytes suit, FixedString32Bytes rank)
@@ -463,35 +486,33 @@ public class CardManager : NetworkBehaviour
         card.GetComponent<Image>().sprite = spriteToSet;
     }
 	
-	// A server-only helper function to check if a card is in a specific player's hand.
-    private bool IsCardInPlayerHand(GameObject card, ulong targetClientId)
-    {
-        List<GameObject> targetHand = (targetClientId == player1_clientId) ? player1Hand : player2Hand;
-        return targetHand != null && targetHand.Contains(card);
-    }
     
     // Arranges the cards in a hand visually to fan them out and center them.
-    void ArrangeHand(List<GameObject> hand, RectTransform handArea)
+    void ArrangeHand(RectTransform handArea)
     {
-        if (hand == null || hand.Count == 0) return;
-        
-        // Safety check to remove any null entries from the list (e.g., if a card was destroyed).
-        hand.RemoveAll(item => item == null);
-        if (hand.Count == 0) return;
+        // Create a temporary list of all card GameObjects that are children of the handArea.
+        List<RectTransform> cardsInHand = new List<RectTransform>();
+        foreach (Transform child in handArea.transform)
+        {
+            // Make sure we only add active cards to the list
+            if (child.gameObject.activeInHierarchy)
+            {
+                cardsInHand.Add(child.GetComponent<RectTransform>());
+            }
+        }
 
-        float cardWidth = hand[0].GetComponent<RectTransform>().rect.width;
+        if (cardsInHand.Count == 0) return;
+
+        float cardWidth = cardsInHand[0].rect.width;
         float overlapAmount = 0.6f;
         float spacing = cardWidth * (1 - overlapAmount);
-        float totalHandWidth = (hand.Count - 1) * spacing + cardWidth;
+        float totalHandWidth = (cardsInHand.Count - 1) * spacing + cardWidth;
         float startX = -totalHandWidth / 2f;
-        
-        // --- Position Each Card ---
-        for (int i = 0; i < hand.Count; i++)
+
+        for (int i = 0; i < cardsInHand.Count; i++)
         {
-            if (hand[i] == null) continue; 
-            RectTransform cardRect = hand[i].GetComponent<RectTransform>();
+            RectTransform cardRect = cardsInHand[i];
             cardRect.anchoredPosition = new Vector2(startX + (i * spacing), 0);
-            // SetAsLastSibling ensures cards on the right render on top of cards on the left.
             cardRect.SetAsLastSibling();
         }
     }
@@ -521,4 +542,37 @@ public class CardManager : NetworkBehaviour
         // Call a new ServerRpc on the GameFlow script to tell the server our choice
         gameFlow.SetActiveSuitServerRpc(chosenSuit, NetworkManager.Singleton.LocalClientId);
     }
+
+    public void ShowWinScreen()
+    {
+        // Hide all other panels and show the win screen
+        gamePanel.SetActive(false);
+        winScreenPanel.SetActive(true);
+    }
+
+    public void ShowLoseScreen()
+    {
+        // Hide all other panels and show the lose screen
+        gamePanel.SetActive(false);
+        loseScreenPanel.SetActive(true);
+    }
 }
+
+[System.Serializable]
+public class PlayerData
+{
+    public ulong ClientId;
+    public List<GameObject> Hand = new List<GameObject>();
+    public RectTransform HandArea; // The UI area for this player's hand
+    public int PlayerIndex;
+
+    public PlayerData(ulong clientId, RectTransform handArea, int playerIndex)
+    {
+        ClientId = clientId;
+        HandArea = handArea;
+        PlayerIndex = playerIndex;
+    }
+}
+
+
+

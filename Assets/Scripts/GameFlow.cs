@@ -1,13 +1,14 @@
 using Unity.Netcode;
 using UnityEngine;
 using Unity.Collections;
+using System.Collections.Generic;
 
 public class GameFlow : NetworkBehaviour
 {
     // This variable will be synced to all players. It holds the ID of the client whose turn it is.
     public NetworkVariable<ulong> CurrentPlayerId = new NetworkVariable<ulong>();
     public NetworkVariable<FixedString32Bytes> ActiveSuit = new NetworkVariable<FixedString32Bytes>();
-
+    private List<ulong> turnOrder = new List<ulong>();
     private CardManager cardManager;
 
     public override void OnNetworkSpawn()
@@ -33,12 +34,61 @@ public class GameFlow : NetworkBehaviour
         cardManager.ShowSuitChoicePanel();
     }
 
+    [ClientRpc]
+    private void InitializeClientRpc(int playerIndex, ClientRpcParams clientRpcParams = default)
+    {
+        // Find the CardManager on the client and pass the info
+        cardManager.SetLocalPlayerInfo(playerIndex);
+    }
+
+    public void StartGameWithPlayers(List<ulong> playerIds)
+    {
+        if (!IsServer) return;
+
+        turnOrder = playerIds;
+
+        // Set the turn to the first player in the list
+        SetPlayerTurn(turnOrder[0]);
+
+        for (int i = 0; i < turnOrder.Count; i++)
+        {
+            ulong clientId = turnOrder[i];
+            ClientRpcParams clientRpcParams = new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } }
+            };
+            InitializeClientRpc(i, clientRpcParams);
+        }
+    }
+
     // A server-only function to set the turn to a specific player.
     public void SetPlayerTurn(ulong playerId)
     {
         if (!IsServer) return;
         CurrentPlayerId.Value = playerId;
         cardManager.active_player_has_drawn = false;
+    }
+
+    public ulong GetNextPlayerInTurn(ulong currentPlayerId)
+    {
+        int currentPlayerIndex = turnOrder.IndexOf(currentPlayerId);
+        int nextPlayerIndex = (currentPlayerIndex + 1) % turnOrder.Count;
+        return turnOrder[nextPlayerIndex];
+    }
+
+    public void SwitchTurn(ulong playerWhoJustPlayed)
+    {
+        if (!IsServer) return;
+
+        // Determine who the next player is.
+
+        int currentPlayerIndex = turnOrder.IndexOf(playerWhoJustPlayed);
+        int nextPlayerIndex = (currentPlayerIndex + 1) % turnOrder.Count;
+        ulong nextPlayerId = turnOrder[nextPlayerIndex];
+
+        // Set the turn to the next player.
+        SetPlayerTurn(nextPlayerId);
+        Debug.Log($"Turn switched. It is now Client {nextPlayerId}'s turn.");
     }
 
     // This server-side method checks if a card can be legally played.
@@ -74,21 +124,15 @@ public class GameFlow : NetworkBehaviour
         return false;
     }
 
-    public void SwitchTurn(ulong playerWhoJustPlayed)
-    {
-        if (!IsServer) return;
-
-        // Determine who the next player is.
-
-        ulong nextPlayerId = (playerWhoJustPlayed == cardManager.player1_clientId) ? cardManager.player2_clientId : cardManager.player1_clientId;
-
-        // Set the turn to the next player.
-        SetPlayerTurn(nextPlayerId);
-        Debug.Log($"Turn switched. It is now Client {nextPlayerId}'s turn.");
-    }
 
     public void ApplyPower(ulong actingPlayer, ulong actedPlayer, CardData cardData)
     {
+        if ((cardData.Rank.Value == "queen" || cardData.Rank.Value == "jack")  && cardManager.players[actingPlayer].Hand.Count == 0 )
+        {
+            TriggerGameOverClientRpc(actingPlayer);
+            return;
+        }
+
         if (cardData.Rank.Value == "6")
         {
             cardManager.DrawCard(actedPlayer, true);
@@ -125,6 +169,37 @@ public class GameFlow : NetworkBehaviour
 
         if (cardData.Rank.Value == "ace" || cardData.Rank.Value == "8") return ;
         SwitchTurn(actingPlayer);
+    }
+
+    [ClientRpc]
+    private void TriggerGameOverClientRpc(ulong winnerId)
+    {
+        // This runs on ALL clients, including the host.
+        // Each client checks if THEY are the winner.
+        if (winnerId == NetworkManager.Singleton.LocalClientId)
+        {
+            cardManager.ShowWinScreen();
+        }
+        else
+        {
+            cardManager.ShowLoseScreen();
+        }
+
+        // Start a coroutine on each client to wait 3 seconds, then reset.
+        StartCoroutine(EndGameAndReset());
+    }
+
+    private System.Collections.IEnumerator EndGameAndReset()
+    {
+        // Wait for 3 seconds to show the win/lose screen.
+        yield return new WaitForSeconds(3f);
+
+        // This is the simplest and most robust way to reset the game.
+        // It shuts down the current network session.
+        NetworkManager.Singleton.Shutdown();
+
+        // It then reloads the very first scene (build index 0) to start over.
+        UnityEngine.SceneManagement.SceneManager.LoadScene(0);
     }
 
 
