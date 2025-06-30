@@ -176,6 +176,7 @@ public class GameFlow : NetworkBehaviour
     {
         // This runs on ALL clients, including the host.
         // Each client checks if THEY are the winner.
+        cardManager.endGamePanel.SetActive(true);
         if (winnerId == NetworkManager.Singleton.LocalClientId)
         {
             cardManager.ShowWinScreen();

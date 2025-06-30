@@ -729,6 +729,7 @@ MonoBehaviour:
   - {fileID: 1874913050}
   - {fileID: 678290122}
   gamePanel: {fileID: 1031348432}
+  endGamePanel: {fileID: 257598593}
   winScreenPanel: {fileID: 748617912}
   loseScreenPanel: {fileID: 1514890661}
   suitChoicePanel: {fileID: 1563699249}
@@ -2052,7 +2053,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &748617913
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3259,7 +3260,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1514890662
 RectTransform:
   m_ObjectHideFlags: 0

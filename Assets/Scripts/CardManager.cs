@@ -16,6 +16,7 @@ public class CardManager : NetworkBehaviour
     public GameObject gamePanel;
 
     [Header("Game Over UI")]
+    public GameObject endGamePanel;
     public GameObject winScreenPanel;
     public GameObject loseScreenPanel;
 
