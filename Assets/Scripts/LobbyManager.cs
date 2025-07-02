@@ -149,7 +149,8 @@ public class LobbyManager : MonoBehaviour
         // The host can only click "Start" if all players are ready
         if(isHost)
         {
-            startGameButton.interactable = allPlayersReady;
+            bool isLobbyFull = currentLobby.Players.Count == currentLobby.MaxPlayers;
+            startGameButton.interactable = allPlayersReady && isLobbyFull;
         }
     }
 

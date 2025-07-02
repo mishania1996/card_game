@@ -7,6 +7,7 @@ public class GameFlow : NetworkBehaviour
 {
     // This variable will be synced to all players. It holds the ID of the client whose turn it is.
     public NetworkVariable<ulong> CurrentPlayerId = new NetworkVariable<ulong>();
+    public NetworkVariable<int> NumberOfPlayers = new NetworkVariable<int>(2, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<FixedString32Bytes> ActiveSuit = new NetworkVariable<FixedString32Bytes>();
     private List<ulong> turnOrder = new List<ulong>();
     private CardManager cardManager;
@@ -160,7 +161,7 @@ public class GameFlow : NetworkBehaviour
         {
             ulong actedPlayerId = GetPrevPlayerInTurn(actingPlayer);
             cardManager.DrawCard(actedPlayerId, true);
-            if (cardManager.NumberOfPlayers > 2)
+            if (NumberOfPlayers.Value > 2)
             {
                 SetPlayerTurn(GetNextPlayerInTurn(actingPlayer));
                 return;
@@ -174,7 +175,7 @@ public class GameFlow : NetworkBehaviour
             cardManager.DrawCard(actedPlayerId, true);
             cardManager.DrawCard(actedPlayerId, true);
 
-            if (cardManager.NumberOfPlayers > 2)
+            if (NumberOfPlayers.Value > 2)
             {
                 SetPlayerTurn(GetNextNextPlayerInTurn(actingPlayer));
                 return;
@@ -192,7 +193,7 @@ public class GameFlow : NetworkBehaviour
                 cardManager.DrawCard(actedPlayerId, true);
             }
 
-            if (cardManager.NumberOfPlayers > 2)
+            if (NumberOfPlayers.Value > 2)
             {
                 SetPlayerTurn(GetNextNextPlayerInTurn(actingPlayer));
                 return;

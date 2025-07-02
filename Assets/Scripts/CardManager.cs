@@ -7,8 +7,7 @@ using System.Linq;
 using Unity.Collections; 
 
 public class CardManager : NetworkBehaviour
-{   [Header("Game Settings")]
-    public int NumberOfPlayers = 3;
+{
     [Header("UI Areas")]
     public RectTransform deckDrawArea;
     public RectTransform discardPileArea;
@@ -90,7 +89,7 @@ public class CardManager : NetworkBehaviour
     {
         if (!IsServer) return;
 		
-        if (players.Count >= NumberOfPlayers) return;
+        if (players.Count >= gameFlow.NumberOfPlayers.Value) return;
 		// Add the new client to our player tracking dictionary if they aren't already in it.
         // This prevents adding the same player twice.
         if (players.ContainsKey(clientId)) return;
@@ -100,7 +99,7 @@ public class CardManager : NetworkBehaviour
 
         Debug.Log($"Player with ClientId {clientId} connected. Total players: {players.Count}");
 
-        if (players.Count == NumberOfPlayers)
+        if (players.Count == gameFlow.NumberOfPlayers.Value)
         {
             gameFlow.StartGameClientRpc();
             // Pass the list of connected player IDs to the GameFlow
@@ -436,7 +435,7 @@ public class CardManager : NetworkBehaviour
                 break;
             case CardLocation.PlayerHand:
             	// Determine the correct hand area
-                int uiSlotIndex = (ownerPlayerIndex - myPlayerIndex + NumberOfPlayers) % NumberOfPlayers;
+                int uiSlotIndex = (ownerPlayerIndex - myPlayerIndex + gameFlow.NumberOfPlayers.Value) % gameFlow.NumberOfPlayers.Value;
                 RectTransform targetArea = playerHandAreas[uiSlotIndex];
 
                 if (isMyCard)

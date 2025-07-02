@@ -36,6 +36,7 @@ public class ConnectionManagerUI : MonoBehaviour
     [Header("Scripts")]
     public CardManager cardManager;
     public LobbyManager lobbyManager;
+    public GameFlow gameFlow;
 
     // Add or modify the Awake() method in ConnectionManagerUI.cs
     private void Awake()
@@ -71,6 +72,7 @@ public class ConnectionManagerUI : MonoBehaviour
     {
         string selectedPlayerCountText = playerCountDropdown.options[playerCountDropdown.value].text;
         int maxPlayers = int.Parse(selectedPlayerCountText);
+        gameFlow.NumberOfPlayers.Value = maxPlayers;
 
         // Show a "Connecting..." or "Creating..." screen
         connectingStatusPanel.SetActive(true);
@@ -173,12 +175,34 @@ public class ConnectionManagerUI : MonoBehaviour
         // Show a "Connecting..." screen
         connectingStatusPanel.SetActive(true);
         connectionPanel.SetActive(false);
+        // --- NEW WORKAROUND FOR SINGLE-DEVICE TESTING ---
+        // Only try to officially join the lobby if we are not the host.
+        // This check works because on a single machine, your client has the same ID as the host.
+        bool isHost = lobby.HostId == AuthenticationService.Instance.PlayerId;
+        if (!isHost)
+        {
+            // This is the normal flow for a real remote client.
+            await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id);
+        }
+        else
+        {
+            Debug.LogWarning("Joining our own lobby for local testing. Skipping official lobby join.");
+        }
 
-        // Join the selected lobby
-        Lobby joiningLobby = await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id);
 
         // Get the Relay join code from the lobby's public data
-        string joinCode = joiningLobby.Data["JoinCode"].Value;
+        string joinCode = lobby.Data["JoinCode"].Value;
+
+        // --- END OF WORKAROUND ---
+
+
+
+        // Add this back if you remove workaround
+        //Lobby joiningLobby = await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id);
+
+        // Get the Relay join code from the lobby's public data
+        //string joinCode = joiningLobby.Data["JoinCode"].Value;
+        // Add till here
 
         Debug.Log($"Retrieved Relay join code: {joinCode}");
 
@@ -190,6 +214,10 @@ public class ConnectionManagerUI : MonoBehaviour
         transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
 
         NetworkManager.Singleton.StartClient();
+
+        lobbyManager.SetCurrentLobby(lobby);
+        connectingStatusPanel.SetActive(false);
+        lobbyPanel.SetActive(true);
     }
 
 
