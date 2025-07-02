@@ -18,6 +18,19 @@ public class GameFlow : NetworkBehaviour
         cardManager = FindAnyObjectByType<CardManager>();
     }
 
+    // Add this new public method to GameFlow.cs
+    public void ServerSideGameStart()
+    {
+        // This method should only ever run on the server.
+        if (!IsServer) return;
+
+        // This is the logic we moved from CardManager.
+        // It sets the turn order and tells the CardManager to deal the cards.
+        List<ulong> connectedPlayerIds = new List<ulong>(cardManager.players.Keys);
+        StartGameWithPlayers(connectedPlayerIds);
+        cardManager.StartGameSetup();
+    }
+
     [ServerRpc(RequireOwnership = false)]
     public void SetActiveSuitServerRpc(string chosenSuit, ulong actingPlayerId)
     {
@@ -33,6 +46,7 @@ public class GameFlow : NetworkBehaviour
     {
         // Find the ConnectionManagerUI in the scene and tell it to show the game panel.
         FindAnyObjectByType<ConnectionManagerUI>().ShowGameUI();
+        FindAnyObjectByType<LobbyManager>().HideLobby();
     }
 
 

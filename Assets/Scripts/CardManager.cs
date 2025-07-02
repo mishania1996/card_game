@@ -99,17 +99,16 @@ public class CardManager : NetworkBehaviour
 
         Debug.Log($"Player with ClientId {clientId} connected. Total players: {players.Count}");
 
-        if (players.Count == gameFlow.NumberOfPlayers.Value)
-        {
-            gameFlow.StartGameClientRpc();
-            // Pass the list of connected player IDs to the GameFlow
-            List<ulong> connectedPlayerIds = new List<ulong>(players.Keys);
-            gameFlow.StartGameWithPlayers(connectedPlayerIds);
+    }
 
+    public void StartGameSetup()
+    {
+        if (IsServer)
+        {
             StartCoroutine(ServerGameSetup());
         }
-
     }
+
 
     public void SetLocalPlayerInfo(int playerIndex)
     {

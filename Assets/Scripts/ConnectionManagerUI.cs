@@ -15,11 +15,13 @@ using UnityEngine.UI;
 public class ConnectionManagerUI : MonoBehaviour
 {
     [Header("UI Panels")]
+    public GameObject enterNamePanel;
     public GameObject connectionPanel;
     public GameObject gamePanel;
     public GameObject connectingStatusPanel;
 
     [Header("Lobby UI")]
+    public Button confirmNameButton;
     public GameObject lobbyPanel;
     public TMP_InputField playerNameInputField;
     public TMP_InputField roomNameInputField;
@@ -51,21 +53,65 @@ public class ConnectionManagerUI : MonoBehaviour
         }
     }
 
-    async void Start()
+    void Start()
     {
-        connectionPanel.SetActive(true);
+        enterNamePanel.SetActive(true);
+        connectionPanel.SetActive(false);
         gamePanel.SetActive(false);
+        lobbyPanel.SetActive(false);
         connectingStatusPanel.SetActive(false);
 
-        createRoomButton.onClick.AddListener(OnCreateRoomClicked);
-        refreshLobbiesButton.onClick.AddListener(OnRefreshLobbiesClicked);
+        confirmNameButton.onClick.AddListener(OnConfirmNameClicked);
 
-        await UnityServices.InitializeAsync();
-        if (!AuthenticationService.Instance.IsSignedIn)
+    }
+
+    private async void OnConfirmNameClicked()
+    {
+        // Get the player's name from the input field
+        string profileName = playerNameInputField.text;
+
+        // Validate that a name has been entered
+        if (string.IsNullOrWhiteSpace(profileName))
         {
-            await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            Debug.LogError("Player Name cannot be empty.");
+            return;
         }
-        Debug.Log($"Player is signed in with ID: {AuthenticationService.Instance.PlayerId}");
+
+        // This is the initialization and sign-in logic from our previous steps
+        try
+        {
+            InitializationOptions options = new InitializationOptions();
+            options.SetProfile(profileName);
+
+            await UnityServices.InitializeAsync(options);
+
+            if (!AuthenticationService.Instance.IsSignedIn)
+            {
+                await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            }
+
+            createRoomButton.onClick.AddListener(OnCreateRoomClicked);
+            refreshLobbiesButton.onClick.AddListener(OnRefreshLobbiesClicked);
+
+
+
+            Debug.Log($"Signed in with profile '{profileName}'. Player ID: {AuthenticationService.Instance.PlayerId}");
+
+            if (enterNamePanel == null)
+            {
+                Debug.LogError("The 'enterNamePanel' variable IS NULL right before trying to hide it!");
+            }
+
+            // After successful sign-in, switch to the lobby browser panel
+            enterNamePanel.SetActive(false);
+            connectionPanel.SetActive(true);
+
+            Debug.Log("5. UI Panels switched.");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to sign in: {e}");
+        }
     }
 
   private async void OnCreateRoomClicked()
@@ -175,49 +221,41 @@ public class ConnectionManagerUI : MonoBehaviour
         // Show a "Connecting..." screen
         connectingStatusPanel.SetActive(true);
         connectionPanel.SetActive(false);
-        // --- NEW WORKAROUND FOR SINGLE-DEVICE TESTING ---
-        // Only try to officially join the lobby if we are not the host.
-        // This check works because on a single machine, your client has the same ID as the host.
-        bool isHost = lobby.HostId == AuthenticationService.Instance.PlayerId;
-        if (!isHost)
+
+        try
         {
-            // This is the normal flow for a real remote client.
-            await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id);
+            JoinLobbyByIdOptions options = new JoinLobbyByIdOptions();
+            options.Player = new Player { Data = new Dictionary<string, PlayerDataObject>() };
+            options.Player.Data.Add("PlayerName", new PlayerDataObject(
+            visibility: PlayerDataObject.VisibilityOptions.Member,
+            value: playerNameInputField.text));
+
+
+
+            Lobby joinedLobby = await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id, options);
+            string joinCode = joinedLobby.Data["JoinCode"].Value;
+
+            Debug.Log($"Retrieved Relay join code: {joinCode}");
+
+            // Join the Relay allocation using the retrieved code
+            JoinAllocation allocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
+
+            // Configure the transport and start the client
+            UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+            transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
+
+            NetworkManager.Singleton.StartClient();
+
+            lobbyManager.SetCurrentLobby(joinedLobby);
+            connectingStatusPanel.SetActive(false);
+            lobbyPanel.SetActive(true);
         }
-        else
+        catch (LobbyServiceException e)
         {
-            Debug.LogWarning("Joining our own lobby for local testing. Skipping official lobby join.");
+            Debug.LogError($"Failed to join lobby or relay: {e}");
+            connectingStatusPanel.SetActive(false);
+            connectionPanel.SetActive(true);
         }
-
-
-        // Get the Relay join code from the lobby's public data
-        string joinCode = lobby.Data["JoinCode"].Value;
-
-        // --- END OF WORKAROUND ---
-
-
-
-        // Add this back if you remove workaround
-        //Lobby joiningLobby = await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id);
-
-        // Get the Relay join code from the lobby's public data
-        //string joinCode = joiningLobby.Data["JoinCode"].Value;
-        // Add till here
-
-        Debug.Log($"Retrieved Relay join code: {joinCode}");
-
-        // Join the Relay allocation using the retrieved code
-        JoinAllocation allocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
-
-        // Configure the transport and start the client
-        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-        transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
-
-        NetworkManager.Singleton.StartClient();
-
-        lobbyManager.SetCurrentLobby(lobby);
-        connectingStatusPanel.SetActive(false);
-        lobbyPanel.SetActive(true);
     }
 
 

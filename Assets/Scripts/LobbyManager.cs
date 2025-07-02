@@ -82,6 +82,7 @@ public class LobbyManager : MonoBehaviour
         // Continue polling as long as we are in a lobby
         while (this != null && currentLobby != null)
         {
+            await System.Threading.Tasks.Task.Delay(5000);
             try
             {
                 // Send a heartbeat ping to keep the lobby alive
@@ -90,6 +91,7 @@ public class LobbyManager : MonoBehaviour
                 // Poll for the latest lobby data
                 Lobby updatedLobby = await LobbyService.Instance.GetLobbyAsync(currentLobby.Id);
                 currentLobby = updatedLobby;
+                Debug.Log($"Polling... Lobby has {currentLobby.Players.Count} players.");
 
                 // Redraw the UI with the new data
                 RedrawPlayerList();
@@ -225,6 +227,8 @@ public class LobbyManager : MonoBehaviour
         {
             Debug.Log("Host is starting the game...");
 
+            gameFlow.ServerSideGameStart();
+
             // Lock the lobby to prevent new players from joining mid-game
             await LobbyService.Instance.UpdateLobbyAsync(currentLobby.Id, new UpdateLobbyOptions { IsLocked = true });
 
@@ -235,5 +239,12 @@ public class LobbyManager : MonoBehaviour
         {
             Debug.Log(e);
         }
+    }
+
+
+    public void HideLobby()
+    {
+        // A simple command to disable the GameObject this script is attached to.
+        gameObject.SetActive(false);
     }
 }
