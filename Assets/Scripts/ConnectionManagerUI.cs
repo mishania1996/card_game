@@ -1,10 +1,14 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
-using Unity.Netcode.Transports.UTP; // This is the one that fixes the error
+using Unity.Netcode.Transports.UTP;
 using Unity.Services.Core;
 using Unity.Services.Authentication;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
+using Unity.Services.Lobbies;
+using Unity.Services.Lobbies.Models;
+using Unity.Services.Multiplayer;
 using TMPro; // For TextMeshPro UI elements
 using UnityEngine.UI;
 
@@ -15,26 +19,36 @@ public class ConnectionManagerUI : MonoBehaviour
     public GameObject gamePanel;
     public GameObject connectingStatusPanel;
 
-    [Header("Connection Buttons")]
-    public Button hostButton;
-    public Button clientButton;
+    [Header("Lobby UI")]
+    public GameObject lobbyPanel;
+    public TMP_InputField playerNameInputField;
+    public TMP_InputField roomNameInputField;
+    public TMP_Dropdown playerCountDropdown;
+    public Button createRoomButton;
 
-    [Header("Connection Fields")]
-    public TMP_InputField joinCodeInputField;
-    public TMP_Text joinCodeText;
 
-    [Header("In-Game Buttons")]
-    public Button p1_DrawButton;
-    public Button p2_DrawButton;
-    public Button p1_PassButton;
-    public Button p2_PassButton;
+    [Header("Lobby List UI")]
+    public Button refreshLobbiesButton;
+    public GameObject lobbyItemPrefab; // The prefab for a single row in the list
+    public Transform lobbyListContent; // The "Content" GameObject inside your ScrollView
+
 
     [Header("Scripts")]
     public CardManager cardManager;
+    public LobbyManager lobbyManager;
 
-    private bool hasSetButtonVisibility = false;
-    private bool hasHookedUpButtons = false;
-
+    // Add or modify the Awake() method in ConnectionManagerUI.cs
+    private void Awake()
+    {
+        if (lobbyManager == null)
+        {
+            Debug.LogError("In ConnectionManagerUI, the LobbyManager reference is NULL!", this.gameObject);
+        }
+        else
+        {
+            Debug.Log("In ConnectionManagerUI, the LobbyManager reference is assigned.", this.gameObject);
+        }
+    }
 
     async void Start()
     {
@@ -42,141 +56,142 @@ public class ConnectionManagerUI : MonoBehaviour
         gamePanel.SetActive(false);
         connectingStatusPanel.SetActive(false);
 
-        if (p1_DrawButton != null) p1_DrawButton.gameObject.SetActive(false);
-        if (p2_DrawButton != null) p2_DrawButton.gameObject.SetActive(false);
-        if (p1_PassButton != null) p1_PassButton.gameObject.SetActive(false);
-        if (p2_PassButton != null) p2_PassButton.gameObject.SetActive(false);
-
-        hostButton.onClick.AddListener(OnHostButtonClicked);
-        clientButton.onClick.AddListener(OnClientButtonClicked);
+        createRoomButton.onClick.AddListener(OnCreateRoomClicked);
+        refreshLobbiesButton.onClick.AddListener(OnRefreshLobbiesClicked);
 
         await UnityServices.InitializeAsync();
-        await AuthenticationService.Instance.SignInAnonymouslyAsync();
-        Debug.Log($"Signed in. Player ID: {AuthenticationService.Instance.PlayerId}");
+        if (!AuthenticationService.Instance.IsSignedIn)
+        {
+            await AuthenticationService.Instance.SignInAnonymouslyAsync();
+        }
+        Debug.Log($"Player is signed in with ID: {AuthenticationService.Instance.PlayerId}");
     }
 
-    void Update()
+  private async void OnCreateRoomClicked()
     {
-        // We only need to run this logic until everything is set up.
-        if (hasSetButtonVisibility && hasHookedUpButtons)
-        {
-            return;
-        }
+        string selectedPlayerCountText = playerCountDropdown.options[playerCountDropdown.value].text;
+        int maxPlayers = int.Parse(selectedPlayerCountText);
 
-        // Wait until we are connected to the network.
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient)
-        {
-            // --- Part 1: Set button visibility ---
-            if (!hasSetButtonVisibility)
-            {
-                if (NetworkManager.Singleton.IsHost)
-                {
-                    p1_DrawButton.gameObject.SetActive(true);
-                    p1_PassButton.gameObject.SetActive(true);
-                    p2_DrawButton.gameObject.SetActive(false);
-                    p2_PassButton.gameObject.SetActive(false);
-                }
-                else
-                {
-                    p1_DrawButton.gameObject.SetActive(false);
-                    p1_PassButton.gameObject.SetActive(false);
-                    p2_DrawButton.gameObject.SetActive(true);
-                    p2_PassButton.gameObject.SetActive(true);
-                }
-                hasSetButtonVisibility = true;
-            }
-
-            // --- Part 2: Hook up button listeners ---
-            if (!hasHookedUpButtons)
-            {
-                // Find the CardManager only after we've connected.
-                cardManager = FindAnyObjectByType<CardManager>();
-                if (cardManager != null)
-                {
-                    p1_DrawButton.onClick.RemoveAllListeners();
-                    p1_DrawButton.onClick.AddListener(() => cardManager.OnDrawCardButtonPressed());
-
-                    p2_DrawButton.onClick.RemoveAllListeners();
-                    p2_DrawButton.onClick.AddListener(() => cardManager.OnDrawCardButtonPressed());
-
-                    p1_PassButton.onClick.RemoveAllListeners();
-                    p1_PassButton.onClick.AddListener(() => cardManager.OnPassButtonPressed());
-
-                    p2_PassButton.onClick.RemoveAllListeners();
-                    p2_PassButton.onClick.AddListener(() => cardManager.OnPassButtonPressed());
-
-
-                    hasHookedUpButtons = true;
-                }
-            }
-        }
-    }
-
-
-    private async void OnHostButtonClicked()
-    {
+        // Show a "Connecting..." or "Creating..." screen
         connectingStatusPanel.SetActive(true);
         connectionPanel.SetActive(false);
 
-        try
+        // Create a Relay allocation ---
+        // This gets a join code that we will hide inside our new lobby.
+        Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1);
+        string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+
+        // --- Step 2: Set up the Lobby options ---
+        CreateLobbyOptions options = new CreateLobbyOptions();
+        options.Player = new Player { Data = new Dictionary<string, PlayerDataObject>() };
+
+        // We can add player data like their name. "S" means String.
+        options.Player.Data.Add("PlayerName", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Member, playerNameInputField.text));
+
+        // The lobby's public data will hold our Relay join code.
+        // This is how clients will find the Relay server to connect to.
+        options.Data = new Dictionary<string, DataObject>()
         {
-            int maxPlayers = cardManager.NumberOfPlayers - 1;
+            {
+                "JoinCode", new DataObject(
+                    visibility: DataObject.VisibilityOptions.Public,
+                    value: joinCode)
+            }
+        };
+
+        // --- Step 3: Create the Lobby ---
+        Lobby lobby = await LobbyService.Instance.CreateLobbyAsync(roomNameInputField.text, maxPlayers, options);
+        Debug.Log($"ConnectionManagerUI is calling SetCurrentLobby on the object named: '{lobbyManager.gameObject.name}'", lobbyManager.gameObject);
+    lobbyManager.SetCurrentLobby(lobby);
 
 
-            // 1. Create a Relay allocation
+        // --- Step 4: Start the Host using the Relay data ---
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
 
-            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers);
+        NetworkManager.Singleton.StartHost();
 
-            // 2. Get the join code for the allocation
-            string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
-            joinCodeText.text = $"Join Code: {joinCode}";
-            Debug.Log($"Host created relay with join code: {joinCode}");
+        // --- Step 5: Transition to the Lobby UI ---
+        // You would switch to a new UI panel here where the host can see connected players
+        // and a "Start Game" button. For now, we can just go to the main game UI.
+        connectingStatusPanel.SetActive(false);
+        lobbyPanel.SetActive(true);
 
-            // 3. Configure the Unity Transport to use the Relay server
-            UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-            transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls")); // "dtls" enables encryption
+        Debug.Log($"Successfully created lobby '{lobby.Name}' with code '{lobby.LobbyCode}' and Relay join code '{joinCode}'");
 
-            // 4. Start the host
-            NetworkManager.Singleton.StartHost();
-            // Call your existing method to switch panels
-        }
-        catch (RelayServiceException e)
-        {
-            Debug.LogError($"Failed to start host via Relay: {e.Message}");
-            connectingStatusPanel.SetActive(false);
-        }
+
     }
 
-    private async void OnClientButtonClicked()
+
+    private async void OnRefreshLobbiesClicked()
     {
+        Debug.Log("Refreshing lobby list...");
 
-
-        string joinCode = joinCodeInputField.text;
-        if (string.IsNullOrWhiteSpace(joinCode))
+        // Query the Lobby service for a list of all public lobbies
+        QueryLobbiesOptions options = new QueryLobbiesOptions();
+        options.Filters = new List<QueryFilter>()
         {
-            Debug.LogWarning("Join code cannot be empty.");
-            return;
+            // We only want to see lobbies that are not full
+            new QueryFilter(
+                field: QueryFilter.FieldOptions.AvailableSlots,
+                op: QueryFilter.OpOptions.GT,
+                value: "0")
+        };
+
+        QueryResponse queryResponse = await LobbyService.Instance.QueryLobbiesAsync(options);
+
+        // First, clear out the old list of lobbies
+        foreach (Transform child in lobbyListContent)
+        {
+            Destroy(child.gameObject);
         }
 
-        try
+        // Now, create a new UI element for each lobby found
+        foreach (Lobby lobby in queryResponse.Results)
         {
-            // 1. Join the host's allocation using the join code
-            JoinAllocation allocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
-            Debug.Log("Client joined relay successfully.");
+            GameObject lobbyItemInstance = Instantiate(lobbyItemPrefab, lobbyListContent);
 
-            // 2. Configure the Unity Transport to use the Relay server
-            UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-            transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
+            // Get the UI elements from the prefab instance
+            // Note: .Find() is simple, but for larger projects, a dedicated script on the prefab is better.
+            TMP_Text roomNameText = lobbyItemInstance.transform.Find("RoomName").GetComponent<TMP_Text>();
+            TMP_Text playerCountText = lobbyItemInstance.transform.Find("PlayerCount").GetComponent<TMP_Text>();
+            Button joinButton = lobbyItemInstance.transform.Find("JoinButton").GetComponent<Button>();
 
-            // 3. Start the client
-            NetworkManager.Singleton.StartClient();
-        }
-        catch (RelayServiceException e)
-        {
-            Debug.LogError($"Failed to join host via Relay: {e.Message}");
-            connectingStatusPanel.SetActive(false);
+            // Populate the UI elements with the lobby's information
+            roomNameText.text = lobby.Name;
+            playerCountText.text = $"{lobby.Players.Count}/{lobby.MaxPlayers}";
+
+            // Add a listener to the join button to call our join method, passing this specific lobby
+            joinButton.onClick.AddListener(() => OnJoinLobbyClicked(lobby));
         }
     }
+
+    private async void OnJoinLobbyClicked(Lobby lobby)
+    {
+        Debug.Log($"Attempting to join lobby {lobby.Name} ({lobby.Id})");
+
+        // Show a "Connecting..." screen
+        connectingStatusPanel.SetActive(true);
+        connectionPanel.SetActive(false);
+
+        // Join the selected lobby
+        Lobby joiningLobby = await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id);
+
+        // Get the Relay join code from the lobby's public data
+        string joinCode = joiningLobby.Data["JoinCode"].Value;
+
+        Debug.Log($"Retrieved Relay join code: {joinCode}");
+
+        // Join the Relay allocation using the retrieved code
+        JoinAllocation allocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
+
+        // Configure the transport and start the client
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
+
+        NetworkManager.Singleton.StartClient();
+    }
+
 
 
     
