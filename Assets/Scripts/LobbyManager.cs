@@ -20,13 +20,17 @@ public class LobbyManager : MonoBehaviour
 
     [Header("Scripts")]
     public GameFlow gameFlow;
+    public ConnectionManagerUI connectionManagerUI;
+
 
     private Lobby currentLobby;
     private bool isPlayerReady = false;
+    private bool isLeaving = false;
+    private Coroutine heartbeatCoroutine;
+    private Coroutine pollCoroutine;
 
     void Awake()
     {
-
         Debug.Log("A LobbyManager instance has AWAKENED.", this.gameObject);
         // Hook up the OnClick events for each button to their corresponding methods
         readyButton.onClick.AddListener(OnReadyButtonClicked);
@@ -39,12 +43,18 @@ public class LobbyManager : MonoBehaviour
         // Start listening for lobby updates when this panel becomes active
         if (currentLobby != null)
         {
-            HeartbeatAndPollLobby();
+            StartLobbyUpdates();
+        }
+
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
         }
     }
 
     private void OnDisable()
     {
+        NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
     }
 
     // This is called by ConnectionManagerUI to give this script the lobby data
@@ -73,37 +83,48 @@ public class LobbyManager : MonoBehaviour
         // If this script is already active, start the update coroutine
         if (gameObject.activeInHierarchy)
         {
-            HeartbeatAndPollLobby();
+            StartLobbyUpdates();
         }
     }
 
-    private async void HeartbeatAndPollLobby()
+    private void StartLobbyUpdates()
     {
-        // Continue polling as long as we are in a lobby
-        while (this != null && currentLobby != null)
+        // Starts two separate loops: one for heartbeats, one for polling.
+        if (heartbeatCoroutine != null) StopCoroutine(heartbeatCoroutine);
+        if (pollCoroutine != null) StopCoroutine(pollCoroutine);
+
+        heartbeatCoroutine = StartCoroutine(HeartbeatLobbyCoroutine());
+        pollCoroutine = StartCoroutine(PollLobbyCoroutine());
+    }
+
+    private IEnumerator HeartbeatLobbyCoroutine()
+    {
+        while (currentLobby != null)
         {
-            await System.Threading.Tasks.Task.Delay(5000);
+            LobbyService.Instance.SendHeartbeatPingAsync(currentLobby.Id);
+            yield return new WaitForSeconds(15f);
+        }
+    }
+
+    private IEnumerator PollLobbyCoroutine()
+    {
+        while (currentLobby != null)
+        {
+            var getLobbyTask = LobbyService.Instance.GetLobbyAsync(currentLobby.Id);
+            yield return new WaitUntil(() => getLobbyTask.IsCompleted);
+
             try
             {
-                // Send a heartbeat ping to keep the lobby alive
-                await LobbyService.Instance.SendHeartbeatPingAsync(currentLobby.Id);
-
-                // Poll for the latest lobby data
-                Lobby updatedLobby = await LobbyService.Instance.GetLobbyAsync(currentLobby.Id);
+                Lobby updatedLobby = getLobbyTask.Result;
                 currentLobby = updatedLobby;
-                Debug.Log($"Polling... Lobby has {currentLobby.Players.Count} players.");
-
-                // Redraw the UI with the new data
-                RedrawPlayerList();
-
-                // Wait for 2 seconds before the next poll
-                await System.Threading.Tasks.Task.Delay(2000);
+                RedrawPlayerList(); // Redraw UI with fresh data
             }
             catch (LobbyServiceException e)
             {
-                Debug.Log($"Lobby polling stopped due to error: {e}");
-                currentLobby = null; // Stop the loop if an error occurs
+                Debug.LogError($"Failed to poll lobby: {e.InnerException.Message}");
+                currentLobby = null; // Stop polling on error
             }
+            yield return new WaitForSeconds(2f);
         }
     }
 
@@ -146,7 +167,7 @@ public class LobbyManager : MonoBehaviour
         }
 
         bool isHost = currentLobby.HostId == AuthenticationService.Instance.PlayerId;
-        startGameButton.gameObject.SetActive(isHost); // Show the button only if I am the host
+        startGameButton.gameObject.SetActive(isHost);
 
         // The host can only click "Start" if all players are ready
         if(isHost)
@@ -165,15 +186,12 @@ public class LobbyManager : MonoBehaviour
 
         // Store a temporary reference to the lobby we are leaving
         Lobby lobbyToLeave = currentLobby;
-
-        // This is the new way to stop the polling loop.
-        // The 'while (currentLobby != null)' condition in HeartbeatAndPollLobby will become false.
+        isLeaving = true;
         currentLobby = null;
 
         try
         {
             string playerId = AuthenticationService.Instance.PlayerId;
-            // Use the temporary reference to leave the correct lobby
             await LobbyService.Instance.RemovePlayerAsync(lobbyToLeave.Id, playerId);
         }
         catch (LobbyServiceException e)
@@ -182,13 +200,15 @@ public class LobbyManager : MonoBehaviour
         }
 
         // Shutdown the network connection
-        if (NetworkManager.Singleton != null)
+        if (NetworkManager.Singleton != null && (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsHost))
         {
             NetworkManager.Singleton.Shutdown();
         }
 
-        // Reload the scene to go back to the connection screen
-        UnityEngine.SceneManagement.SceneManager.LoadScene(0);
+        gameObject.SetActive(false);
+        connectionManagerUI.connectionPanel.SetActive(true);
+        connectionManagerUI.gamePanel.SetActive(false);
+        ReturnToMenu();
     }
 
     public async void OnReadyButtonClicked()
@@ -246,5 +266,36 @@ public class LobbyManager : MonoBehaviour
     {
         // A simple command to disable the GameObject this script is attached to.
         gameObject.SetActive(false);
+    }
+
+    private void HandleClientDisconnect(ulong clientId)
+    {
+        // We only care if we are a client that has been disconnected by the host.
+        if (NetworkManager.Singleton.IsHost) return;
+
+        // If the disconnect was not because we clicked the "Leave" button, treat it as being kicked.
+        if (!isLeaving)
+        {
+            Debug.Log("Lost connection to the host. Returning to menu.");
+            ReturnToMenu();
+        }
+    }
+
+    private void ReturnToMenu()
+    {
+        // Stop the lobby polling loops.
+        currentLobby = null;
+
+        // Shut down the local network connection.
+        if (NetworkManager.Singleton != null && (NetworkManager.Singleton.IsConnectedClient || NetworkManager.Singleton.IsHost))
+        {
+            NetworkManager.Singleton.Shutdown();
+        }
+
+        // Reset the flag and switch UI panels.
+        isLeaving = false;
+        gameObject.SetActive(false);
+        connectionManagerUI.connectionPanel.SetActive(true);
+        connectionManagerUI.gamePanel.SetActive(false);
     }
 }

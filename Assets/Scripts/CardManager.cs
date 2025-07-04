@@ -28,10 +28,11 @@ public class CardManager : NetworkBehaviour
 
     [Header("Prefabs")]
     public GameObject cardPrefab;
+    public GameFlow gameFlow;
 
     private Dictionary<string, Sprite> allCardSprites = new Dictionary<string, Sprite>();
     private Sprite cardBackSprite;
-    private GameFlow gameFlow;
+
 
     // Server-side authoritative lists
     private List<GameObject> deck = new List<GameObject>();
@@ -53,7 +54,6 @@ public class CardManager : NetworkBehaviour
     {	
     	// This runs for everyone to ensure all players have the card art loaded.
         LoadCardSprites();
-		gameFlow = FindAnyObjectByType<GameFlow>();
 		// The following logic is for the server only.
         if (IsServer)
         {	

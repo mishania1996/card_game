@@ -97,11 +97,6 @@ public class ConnectionManagerUI : MonoBehaviour
 
             Debug.Log($"Signed in with profile '{profileName}'. Player ID: {AuthenticationService.Instance.PlayerId}");
 
-            if (enterNamePanel == null)
-            {
-                Debug.LogError("The 'enterNamePanel' variable IS NULL right before trying to hide it!");
-            }
-
             // After successful sign-in, switch to the lobby browser panel
             enterNamePanel.SetActive(false);
             connectionPanel.SetActive(true);
@@ -120,7 +115,6 @@ public class ConnectionManagerUI : MonoBehaviour
         int maxPlayers = int.Parse(selectedPlayerCountText);
         gameFlow.NumberOfPlayers.Value = maxPlayers;
 
-        // Show a "Connecting..." or "Creating..." screen
         connectingStatusPanel.SetActive(true);
         connectionPanel.SetActive(false);
 
@@ -129,11 +123,11 @@ public class ConnectionManagerUI : MonoBehaviour
         Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1);
         string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
-        // --- Step 2: Set up the Lobby options ---
+        //Set up the Lobby options ---
         CreateLobbyOptions options = new CreateLobbyOptions();
         options.Player = new Player { Data = new Dictionary<string, PlayerDataObject>() };
 
-        // We can add player data like their name. "S" means String.
+        // We can add player data like their name.
         options.Player.Data.Add("PlayerName", new PlayerDataObject(PlayerDataObject.VisibilityOptions.Member, playerNameInputField.text));
 
         // The lobby's public data will hold our Relay join code.
@@ -147,21 +141,18 @@ public class ConnectionManagerUI : MonoBehaviour
             }
         };
 
-        // --- Step 3: Create the Lobby ---
+        // Create the Lobby
         Lobby lobby = await LobbyService.Instance.CreateLobbyAsync(roomNameInputField.text, maxPlayers, options);
         Debug.Log($"ConnectionManagerUI is calling SetCurrentLobby on the object named: '{lobbyManager.gameObject.name}'", lobbyManager.gameObject);
     lobbyManager.SetCurrentLobby(lobby);
 
 
-        // --- Step 4: Start the Host using the Relay data ---
+        // Start the Host using the Relay data
         UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
         transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
 
         NetworkManager.Singleton.StartHost();
 
-        // --- Step 5: Transition to the Lobby UI ---
-        // You would switch to a new UI panel here where the host can see connected players
-        // and a "Start Game" button. For now, we can just go to the main game UI.
         connectingStatusPanel.SetActive(false);
         lobbyPanel.SetActive(true);
 
@@ -218,7 +209,6 @@ public class ConnectionManagerUI : MonoBehaviour
     {
         Debug.Log($"Attempting to join lobby {lobby.Name} ({lobby.Id})");
 
-        // Show a "Connecting..." screen
         connectingStatusPanel.SetActive(true);
         connectionPanel.SetActive(false);
 
@@ -264,10 +254,8 @@ public class ConnectionManagerUI : MonoBehaviour
     // This method now only handles switching panels.
     public void ShowGameUI()
     {
-        if (connectingStatusPanel != null) connectingStatusPanel.SetActive(false);
-
-        // These lines hide the connection UI and show the game UI
-        if (connectionPanel != null) connectionPanel.SetActive(false);
-        if (gamePanel != null) gamePanel.SetActive(true);
+        connectingStatusPanel.SetActive(false);
+        connectionPanel.SetActive(false);
+        gamePanel.SetActive(true);
     }
 }

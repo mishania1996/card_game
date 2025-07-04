@@ -17,8 +17,8 @@ public class PlayableCard : NetworkBehaviour, IPointerClickHandler
     public void OnPointerClick(PointerEventData eventData)
     {
         // A client can only play a card if it's their turn and the card is in their hand.
-        // The 'myCurrentHand' reference is now correctly set on each client by the CardManager's ClientRpc.
-        if (myCurrentHand != null && cardManager != null)
+        // The 'myCurrentHand' reference is set on each client by the CardManager's ClientRpc.
+        if (myCurrentHand != null)
         {
             Debug.Log($"Client {NetworkManager.Singleton.LocalClientId}: Card '{gameObject.name}' clicked! Sending request to server.", this);
             
