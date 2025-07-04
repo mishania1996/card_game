@@ -144,7 +144,7 @@ public class ConnectionManagerUI : MonoBehaviour
         // Create the Lobby
         Lobby lobby = await LobbyService.Instance.CreateLobbyAsync(roomNameInputField.text, maxPlayers, options);
         Debug.Log($"ConnectionManagerUI is calling SetCurrentLobby on the object named: '{lobbyManager.gameObject.name}'", lobbyManager.gameObject);
-    lobbyManager.SetCurrentLobby(lobby);
+        lobbyManager.SetCurrentLobby(lobby);
 
 
         // Start the Host using the Relay data

@@ -75,8 +75,6 @@ public class LobbyManager : MonoBehaviour
 
         currentLobby = lobby;
 
-
-
         // When we first enter the lobby, immediately draw the UI
         RedrawPlayerList();
 
