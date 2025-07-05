@@ -9,6 +9,7 @@ public class GameFlow : NetworkBehaviour
     public NetworkVariable<ulong> CurrentPlayerId = new NetworkVariable<ulong>();
     public NetworkVariable<int> NumberOfPlayers = new NetworkVariable<int>(2, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public NetworkVariable<FixedString32Bytes> ActiveSuit = new NetworkVariable<FixedString32Bytes>();
+    public NetworkVariable<FixedString64Bytes> TurnInfoText = new NetworkVariable<FixedString64Bytes>();
     private List<ulong> turnOrder = new List<ulong>();
     private CardManager cardManager;
 
@@ -45,6 +46,14 @@ public class GameFlow : NetworkBehaviour
     public void StartGameClientRpc()
     {
         // Find the ConnectionManagerUI in the scene and tell it to show the game panel.
+        ConnectionManagerUI connectionManagerUI = FindAnyObjectByType<ConnectionManagerUI>();
+
+        if (cardManager != null && connectionManagerUI != null)
+        {
+            cardManager.RegisterPlayerNameServerRpc(connectionManagerUI.playerNameInputField.text);
+        }
+
+
         FindAnyObjectByType<ConnectionManagerUI>().ShowGameUI();
         FindAnyObjectByType<LobbyManager>().HideLobby();
     }
@@ -90,6 +99,8 @@ public class GameFlow : NetworkBehaviour
         if (!IsServer) return;
         CurrentPlayerId.Value = playerId;
         cardManager.active_player_has_drawn = false;
+        string playerName = cardManager.GetPlayerName(playerId);
+        TurnInfoText.Value = $"{playerName}'s turn";
     }
 
     public ulong GetNextPlayerInTurn(ulong currentPlayerId)

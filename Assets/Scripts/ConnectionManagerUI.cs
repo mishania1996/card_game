@@ -65,6 +65,20 @@ public class ConnectionManagerUI : MonoBehaviour
 
     }
 
+
+    private System.Collections.IEnumerator RegisterNameAfterFrame()
+    {
+        // Wait until the end of the current frame.
+        // This gives the NetworkManager time to finish its setup and register all objects.
+        yield return new WaitForEndOfFrame();
+
+        string myName = playerNameInputField.text;
+        Debug.Log($"--- CLIENT LOG: Attempting to register name '{myName}' to the server.");
+        // Now that the next frame has started, it's safe to find the CardManager and send the RPC.
+        cardManager.RegisterPlayerNameServerRpc(myName);
+    }
+
+
     private async void OnConfirmNameClicked()
     {
         // Get the player's name from the input field

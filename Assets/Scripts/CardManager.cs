@@ -41,7 +41,9 @@ public class CardManager : NetworkBehaviour
     // Player tracking
     public Dictionary<ulong, PlayerData> players = new Dictionary<ulong, PlayerData>();
     public bool active_player_has_drawn = false;
+
     // This will only hold cards for the local player running the game.
+    private Dictionary<ulong, string> playerNames = new Dictionary<ulong, string>();
     private List<GameObject> myLocalHand = new List<GameObject>();
     private int myPlayerIndex = -1;
 
@@ -107,6 +109,25 @@ public class CardManager : NetworkBehaviour
         {
             StartCoroutine(ServerGameSetup());
         }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RegisterPlayerNameServerRpc(FixedString32Bytes name, ServerRpcParams rpcParams = default)
+    {
+        ulong senderId = rpcParams.Receive.SenderClientId;
+        string receivedName = name.ToString();
+        Debug.Log($"--- SERVER LOG: Received name registration from Client ID {senderId} with name: '{receivedName}'");
+
+        playerNames[senderId] = receivedName;
+    }
+
+    public string GetPlayerName(ulong clientId)
+    {
+        if (playerNames.TryGetValue(clientId, out string name))
+        {
+            return name;
+        }
+        return $"Player {clientId}"; // Fallback
     }
 
 
@@ -351,6 +372,11 @@ public class CardManager : NetworkBehaviour
         {
             Debug.LogWarning("Invalid move attempted!");
             return;
+        }
+
+        if (cardData.Rank.Value != "jack")
+        {
+            gameFlow.ActiveSuit.Value = "";
         }
 
         players[requestingClientId].Hand.Remove(cardToPlay);
