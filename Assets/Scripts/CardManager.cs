@@ -578,6 +578,80 @@ public class CardManager : NetworkBehaviour
         gamePanel.SetActive(false);
         loseScreenPanel.SetActive(true);
     }
+
+    public int CalculateScoreForHand(ulong playerId, ulong winnerId, string rankOfWinningCard)
+    {
+        if (!players.ContainsKey(playerId)) return 0;
+
+        int totalScore = 0;
+        List<GameObject> hand = players[playerId].Hand;
+        //if a loser
+        if (playerId != winnerId)
+        {
+            // if a loser is left with only a queen or a jack
+            if(hand.Count == 1 && (hand[0].GetComponent<CardData>().Rank.Value == "queen")) totalScore = 30;
+
+            else if (hand.Count == 1 && (hand[0].GetComponent<CardData>().Rank.Value == "jack")) totalScore = 20;
+            //else
+            else
+            {
+                foreach (GameObject cardObject in hand)
+                {
+                    CardData cardData = cardObject.GetComponent<CardData>();
+                    switch (cardData.Rank.Value.ToString())
+                    {
+                        case "6": totalScore += 6; break;
+                        case "7": totalScore += 7; break;
+                        case "8": totalScore += 8; break;
+                        case "9": totalScore += 9; break;
+                        case "10": totalScore += 10; break;
+                        case "jack": totalScore += 2; break;
+                        case "queen": totalScore += 3; break;
+                        case "king": totalScore += 4; break;
+                        case "ace": totalScore += 11; break;
+                    }
+                }
+            }
+        }
+        //if a winner
+        else
+        {
+         if (rankOfWinningCard == "jack") totalScore -= 20;
+         else totalScore -= 30;
+        }
+
+        return totalScore;
+    }
+
+    public void ClearGameBoard()
+    {
+        if (!IsServer) return;
+
+        // Despawn all cards in player hands
+        foreach (var player in players.Values)
+        {
+            foreach (var card in player.Hand)
+            {
+                card.GetComponent<NetworkObject>().Despawn();
+            }
+            player.Hand.Clear();
+        }
+
+        // Despawn all cards in the discard pile
+        foreach (var card in discardPile)
+        {
+            card.GetComponent<NetworkObject>().Despawn();
+        }
+        discardPile.Clear();
+
+        // Despawn all cards left in the deck
+        foreach (var card in deck)
+        {
+            card.GetComponent<NetworkObject>().Despawn();
+        }
+        deck.Clear();
+    }
+
 }
 
 [System.Serializable]

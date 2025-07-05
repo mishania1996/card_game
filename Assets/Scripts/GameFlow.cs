@@ -2,6 +2,7 @@ using Unity.Netcode;
 using UnityEngine;
 using Unity.Collections;
 using System.Collections.Generic;
+using System.Collections;
 
 public class GameFlow : NetworkBehaviour
 {
@@ -11,12 +12,13 @@ public class GameFlow : NetworkBehaviour
     public NetworkVariable<FixedString32Bytes> ActiveSuit = new NetworkVariable<FixedString32Bytes>();
     public NetworkVariable<FixedString64Bytes> TurnInfoText = new NetworkVariable<FixedString64Bytes>();
     private List<ulong> turnOrder = new List<ulong>();
-    private CardManager cardManager;
+    public CardManager cardManager;
+    public LobbyManager lobbyManager;
+    public ConnectionManagerUI connectionManagerUI;
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn(); // It's good practice to call the base method.
-        cardManager = FindAnyObjectByType<CardManager>();
     }
 
     // Add this new public method to GameFlow.cs
@@ -25,8 +27,8 @@ public class GameFlow : NetworkBehaviour
         // This method should only ever run on the server.
         if (!IsServer) return;
 
-        // This is the logic we moved from CardManager.
-        // It sets the turn order and tells the CardManager to deal the cards.
+        // Sets the turn order and tells the CardManager to deal the cards.
+        cardManager.ClearGameBoard();
         List<ulong> connectedPlayerIds = new List<ulong>(cardManager.players.Keys);
         StartGameWithPlayers(connectedPlayerIds);
         cardManager.StartGameSetup();
@@ -45,8 +47,6 @@ public class GameFlow : NetworkBehaviour
     [ClientRpc]
     public void StartGameClientRpc()
     {
-        // Find the ConnectionManagerUI in the scene and tell it to show the game panel.
-        ConnectionManagerUI connectionManagerUI = FindAnyObjectByType<ConnectionManagerUI>();
 
         if (cardManager != null && connectionManagerUI != null)
         {
@@ -54,8 +54,8 @@ public class GameFlow : NetworkBehaviour
         }
 
 
-        FindAnyObjectByType<ConnectionManagerUI>().ShowGameUI();
-        FindAnyObjectByType<LobbyManager>().HideLobby();
+        connectionManagerUI.ShowGameUI();
+        lobbyManager.HideLobby();
     }
 
 
@@ -120,7 +120,7 @@ public class GameFlow : NetworkBehaviour
     public ulong GetPrevPlayerInTurn(ulong currentPlayerId)
     {
         int currentPlayerIndex = turnOrder.IndexOf(currentPlayerId);
-        int nextPlayerIndex = (currentPlayerIndex - 1) % turnOrder.Count;
+        int nextPlayerIndex = (currentPlayerIndex - 1 + turnOrder.Count) % turnOrder.Count;
         return turnOrder[nextPlayerIndex];
     }
 
@@ -178,7 +178,7 @@ public class GameFlow : NetworkBehaviour
     {
         if ((cardData.Rank.Value == "queen" || cardData.Rank.Value == "jack")  && cardManager.players[actingPlayer].Hand.Count == 0 )
         {
-            TriggerGameOverClientRpc(actingPlayer);
+            TriggerGameOver(actingPlayer, cardData);
             return;
         }
 
@@ -256,37 +256,46 @@ public class GameFlow : NetworkBehaviour
         SetPlayerTurn(GetNextPlayerInTurn(actingPlayer));
     }
 
-    [ClientRpc]
-    private void TriggerGameOverClientRpc(ulong winnerId)
+    private void TriggerGameOver(ulong winnerId, CardData winningCard)
     {
-        // This runs on ALL clients, including the host.
-        // Each client checks if THEY are the winner.
-        cardManager.endGamePanel.SetActive(true);
-        if (winnerId == NetworkManager.Singleton.LocalClientId)
+        if (!IsServer) return;
+
+        string winningRank = winningCard.Rank.Value.ToString();
+
+        foreach (ulong clientId in cardManager.players.Keys)
         {
-            cardManager.ShowWinScreen();
-        }
-        else
-        {
-            cardManager.ShowLoseScreen();
+            int playerScore = cardManager.CalculateScoreForHand(clientId, winnerId, winningRank);
+            lobbyManager.UpdatePlayerScore(clientId, playerScore);
         }
 
-        // Start a coroutine on each client to wait 3 seconds, then reset.
-        StartCoroutine(EndGameAndReset());
+        // 3. Tell all clients the game is over and it's time to return to the lobby.
+        ReturnToLobbyClientRpc();
     }
 
-    private System.Collections.IEnumerator EndGameAndReset()
+
+    [ClientRpc]
+    private void ReturnToLobbyClientRpc()
     {
-        // Wait for 3 seconds to show the win/lose screen.
+        // This runs on all clients.
+        // For now, it just prints a message. Later it will show the score panel.
+        Debug.Log("Game over! Check the server log for scores. Returning to lobby soon...");
+
+        StartCoroutine(LobbyReturnCoroutine());
+    }
+
+
+    private IEnumerator LobbyReturnCoroutine()
+    {
+        // Wait a few seconds for players to read the message.
         yield return new WaitForSeconds(3f);
 
-        // This is the simplest and most robust way to reset the game.
-        // It shuts down the current network session.
-        NetworkManager.Singleton.Shutdown();
-
-        // It then reloads the very first scene (build index 0) to start over.
-        UnityEngine.SceneManagement.SceneManager.LoadScene(0);
+        // Hide the game panel and show the lobby panel again.
+        // We are NOT shutting down the network.
+        cardManager.gamePanel.SetActive(false);
+        lobbyManager.gameObject.SetActive(true);
     }
+
+
 
 
 }

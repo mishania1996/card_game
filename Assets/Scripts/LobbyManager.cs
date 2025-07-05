@@ -24,6 +24,7 @@ public class LobbyManager : MonoBehaviour
 
 
     private Lobby currentLobby;
+    private Dictionary<ulong, int> playerScores = new Dictionary<ulong, int>();
     private bool isPlayerReady = false;
     private bool isLeaving = false;
     private Coroutine heartbeatCoroutine;
@@ -295,5 +296,19 @@ public class LobbyManager : MonoBehaviour
         gameObject.SetActive(false);
         connectionManagerUI.connectionPanel.SetActive(true);
         connectionManagerUI.gamePanel.SetActive(false);
+    }
+
+    public void UpdatePlayerScore(ulong clientId, int scoreChange)
+    {
+        // Ensure the player has a score entry
+        if (!playerScores.ContainsKey(clientId))
+        {
+            playerScores[clientId] = 0;
+        }
+
+        playerScores[clientId] += scoreChange;
+
+        // For now, we'll log the score change to the server's console.
+        Debug.Log($"SERVER: Player {clientId}'s score is now {playerScores[clientId]}");
     }
 }

@@ -2034,6 +2034,9 @@ MonoBehaviour:
         byte0059: 0
         byte0060: 0
         byte0061: 0
+  cardManager: {fileID: 435929640}
+  lobbyManager: {fileID: 1621028272}
+  connectionManagerUI: {fileID: 71922976}
 --- !u!4 &422171341
 Transform:
   m_ObjectHideFlags: 0
