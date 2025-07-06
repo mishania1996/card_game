@@ -19,9 +19,7 @@ public class InGameUIManager : MonoBehaviour
 
     void Start()
     {
-        // Find the managers if they aren't assigned in the inspector
-        cardManager = FindAnyObjectByType<CardManager>();
-        gameFlow = FindAnyObjectByType<GameFlow>();
+
 
         // Hook up the button listeners to the functions in CardManager
         drawButton.onClick.AddListener(() => cardManager.OnDrawCardButtonPressed());

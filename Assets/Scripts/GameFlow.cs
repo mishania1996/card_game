@@ -260,15 +260,17 @@ public class GameFlow : NetworkBehaviour
     {
         if (!IsServer) return;
 
+        lobbyManager.gameObject.SetActive(true);
+
         string winningRank = winningCard.Rank.Value.ToString();
 
         foreach (ulong clientId in cardManager.players.Keys)
         {
-            int playerScore = cardManager.CalculateScoreForHand(clientId, winnerId, winningRank);
-            lobbyManager.UpdatePlayerScore(clientId, playerScore);
+            int scoreChange = cardManager.CalculateScoreForHand(clientId, winnerId, winningRank);
+            lobbyManager.UpdatePlayerScore(clientId, scoreChange);
         }
 
-        // 3. Tell all clients the game is over and it's time to return to the lobby.
+        lobbyManager.SyncScoreboard();
         ReturnToLobbyClientRpc();
     }
 
@@ -292,7 +294,7 @@ public class GameFlow : NetworkBehaviour
         // Hide the game panel and show the lobby panel again.
         // We are NOT shutting down the network.
         cardManager.gamePanel.SetActive(false);
-        lobbyManager.gameObject.SetActive(true);
+        lobbyManager.ShowLobby();
     }
 
 

@@ -7,8 +7,9 @@ using Unity.Services.Lobbies.Models;
 using TMPro;
 using Unity.Netcode;
 using Unity.Services.Authentication;
+using Unity.Collections;
 
-public class LobbyManager : MonoBehaviour
+public class LobbyManager : NetworkBehaviour
 {
     [Header("UI References")]
     public TMP_Text lobbyNameText;
@@ -17,14 +18,24 @@ public class LobbyManager : MonoBehaviour
     public Button startGameButton;
     public Transform playerListContent; // The "Content" object of your scroll view
     public GameObject playerItemPrefab; // The prefab for a single player row
+    public GameObject lobbyPanel;
 
     [Header("Scripts")]
     public GameFlow gameFlow;
     public ConnectionManagerUI connectionManagerUI;
+    public CardManager cardManager;
+
+
+
+    [Header("Scoreboard UI")]
+    public GameObject scoreboardPanel; // The parent panel for the whole scoreboard
+    public Transform gridContainer;    // The object with the Grid Layout Group
+    public GameObject scoreCellPrefab;
 
 
     private Lobby currentLobby;
-    private Dictionary<ulong, int> playerScores = new Dictionary<ulong, int>();
+    private Dictionary<ulong, List<int>> playerScoresHistory = new Dictionary<ulong, List<int>>();
+    private List<ulong> playerDisplayOrder = new List<ulong>();
     private bool isPlayerReady = false;
     private bool isLeaving = false;
     private Coroutine heartbeatCoroutine;
@@ -263,8 +274,18 @@ public class LobbyManager : MonoBehaviour
 
     public void HideLobby()
     {
-        // A simple command to disable the GameObject this script is attached to.
-        gameObject.SetActive(false);
+        if (lobbyPanel != null)
+        {
+            lobbyPanel.SetActive(false);
+        }
+    }
+
+    public void ShowLobby()
+    {
+        if (lobbyPanel != null)
+        {
+            lobbyPanel.SetActive(true);
+        }
     }
 
     private void HandleClientDisconnect(ulong clientId)
@@ -301,14 +322,91 @@ public class LobbyManager : MonoBehaviour
     public void UpdatePlayerScore(ulong clientId, int scoreChange)
     {
         // Ensure the player has a score entry
-        if (!playerScores.ContainsKey(clientId))
+        if (!playerScoresHistory.ContainsKey(clientId))
         {
-            playerScores[clientId] = 0;
+            playerScoresHistory.Add(clientId, new List<int>());
+            if (!playerDisplayOrder.Contains(clientId)) playerDisplayOrder.Add(clientId);
+
+
         }
 
-        playerScores[clientId] += scoreChange;
+        List<int> scoreList = playerScoresHistory[clientId];
+        int previousScore = scoreList.Count > 0 ? scoreList[scoreList.Count - 1] : 0;
+        int newTotalScore = previousScore + scoreChange;
+        scoreList.Add(newTotalScore);
 
         // For now, we'll log the score change to the server's console.
-        Debug.Log($"SERVER: Player {clientId}'s score is now {playerScores[clientId]}");
+        Debug.Log($"SERVER: Player {clientId}'s score is now {newTotalScore}");
+    }
+
+        public void SyncScoreboard()
+    {
+        if (!IsServer || playerDisplayOrder.Count == 0) return;
+
+        // --- Package Data for Sending ---
+        List<FixedString64Bytes> playerNames = new List<FixedString64Bytes>();
+        List<int> scores = new List<int>();
+
+        // This logic for unique 3-letter names can be simplified or reused
+        foreach(ulong clientId in playerDisplayOrder)
+        {
+            playerNames.Add(GetPlayerName(clientId, 3)); // A helper to get the short name
+        }
+
+        int roundsPlayed = playerScoresHistory[playerDisplayOrder[0]].Count;
+        for (int i = 0; i < roundsPlayed; i++)
+        {
+            foreach (ulong clientId in playerDisplayOrder)
+            {
+                scores.Add(playerScoresHistory[clientId][i]);
+            }
+        }
+
+        // Call the ClientRpc to send the packaged data to all clients.
+        UpdateScoreboardClientRpc(playerNames.ToArray(), scores.ToArray(), playerDisplayOrder.Count);
+    }
+
+    private string GetPlayerName(ulong clientId, int maxLength)
+    {
+        // This can be expanded later to handle duplicate names
+        string fullName = cardManager.GetPlayerName(clientId);
+        return fullName.Length > maxLength ? fullName.Substring(0, maxLength).ToUpper() : fullName.ToUpper();
+    }
+
+    [ClientRpc]
+    private void UpdateScoreboardClientRpc(FixedString64Bytes[] playerNames, int[] scores, int numColumns)
+    {
+        // This runs on all clients, telling them to redraw their scoreboard UI.
+        RedrawScoreboardUI(playerNames, scores, numColumns);
+    }
+
+
+    private void RedrawScoreboardUI(FixedString64Bytes[] names, int[] scores, int columns)
+    {
+
+        scoreboardPanel.SetActive(true);
+
+        // Clear any old cells from the grid
+        foreach (Transform child in gridContainer)
+        {
+            Destroy(child.gameObject);
+        }
+
+        // Set the grid layout to have the correct number of columns
+        gridContainer.GetComponent<GridLayoutGroup>().constraintCount = columns;
+
+        // --- Create Header Cells ---
+        for (int i = 0; i < names.Length; i++)
+        {
+            GameObject headerCell = Instantiate(scoreCellPrefab, gridContainer);
+            headerCell.GetComponent<TMP_Text>().text = names[i].ToString();
+        }
+
+        // --- Create Score Cells ---
+        for (int i = 0; i < scores.Length; i++)
+        {
+            GameObject scoreCell = Instantiate(scoreCellPrefab, gridContainer);
+            scoreCell.GetComponent<TMP_Text>().text = scores[i].ToString();
+        }
     }
 }

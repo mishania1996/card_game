@@ -14,11 +14,6 @@ public class CardManager : NetworkBehaviour
     public List<RectTransform> playerHandAreas;
     public GameObject gamePanel;
 
-    [Header("Game Over UI")]
-    public GameObject endGamePanel;
-    public GameObject winScreenPanel;
-    public GameObject loseScreenPanel;
-
     [Header("Suit Choice UI")]
     public GameObject suitChoicePanel;
     public Button heartsButton;
@@ -563,20 +558,6 @@ public class CardManager : NetworkBehaviour
 
         // Call a new ServerRpc on the GameFlow script to tell the server our choice
         gameFlow.SetActiveSuitServerRpc(chosenSuit, NetworkManager.Singleton.LocalClientId);
-    }
-
-    public void ShowWinScreen()
-    {
-        // Hide all other panels and show the win screen
-        gamePanel.SetActive(false);
-        winScreenPanel.SetActive(true);
-    }
-
-    public void ShowLoseScreen()
-    {
-        // Hide all other panels and show the lose screen
-        gamePanel.SetActive(false);
-        loseScreenPanel.SetActive(true);
     }
 
     public int CalculateScoreForHand(ulong playerId, ulong winnerId, string rankOfWinningCard)
