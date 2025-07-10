@@ -125,7 +125,7 @@ public class ConnectionManagerUI : MonoBehaviour
 
   private async void OnCreateRoomClicked()
     {
-        string selectedPlayerCountText = playerCountDropdown.options[playerCountDropdown.value].text;
+        string selectedPlayerCountText = playerCountDropdown.options[playerCountDropdown.value].text.Split(' ')[0];
         int maxPlayers = int.Parse(selectedPlayerCountText);
         gameFlow.NumberOfPlayers.Value = maxPlayers;
 
