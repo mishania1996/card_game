@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -61,8 +62,21 @@ public class ConnectionManagerUI : MonoBehaviour
         lobbyPanel.SetActive(false);
         connectingStatusPanel.SetActive(false);
 
+        confirmNameButton.interactable = false;
+        playerNameInputField.onValueChanged.AddListener(ValidatePlayerName);
+
         confirmNameButton.onClick.AddListener(OnConfirmNameClicked);
 
+    }
+
+    private void ValidatePlayerName(string inputText)
+    {
+        // This regular expression checks for 1-30 characters that are only
+        // letters (upper or lower), numbers, underscores, or hyphens.
+        bool isValid = Regex.IsMatch(inputText, @"^[a-zA-Z0-9_-]{1,30}$");
+
+        // // Enable the button only if the name is valid.
+        confirmNameButton.interactable = isValid;
     }
 
 
@@ -207,8 +221,8 @@ public class ConnectionManagerUI : MonoBehaviour
             // Get the UI elements from the prefab instance
             // Note: .Find() is simple, but for larger projects, a dedicated script on the prefab is better.
             TMP_Text roomNameText = lobbyItemInstance.transform.Find("RoomName").GetComponent<TMP_Text>();
-            TMP_Text playerCountText = lobbyItemInstance.transform.Find("PlayerCount").GetComponent<TMP_Text>();
-            Button joinButton = lobbyItemInstance.transform.Find("JoinButton").GetComponent<Button>();
+            TMP_Text playerCountText = lobbyItemInstance.transform.Find("RightSideContainer/PlayerCount").GetComponent<TMP_Text>();
+            Button joinButton = lobbyItemInstance.transform.Find("RightSideContainer/JoinButton").GetComponent<Button>();
 
             // Populate the UI elements with the lobby's information
             roomNameText.text = lobby.Name;

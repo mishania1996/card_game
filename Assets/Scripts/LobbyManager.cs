@@ -215,7 +215,10 @@ public class LobbyManager : NetworkBehaviour
             NetworkManager.Singleton.Shutdown();
         }
 
-        gameObject.SetActive(false);
+        if (lobbyPanel != null)
+        {
+            lobbyPanel.SetActive(false);
+        }
         connectionManagerUI.connectionPanel.SetActive(true);
         connectionManagerUI.gamePanel.SetActive(false);
         ReturnToMenu();
@@ -339,9 +342,12 @@ public class LobbyManager : NetworkBehaviour
         Debug.Log($"SERVER: Player {clientId}'s score is now {newTotalScore}");
     }
 
-        public void SyncScoreboard()
+    public void SyncScoreboard()
     {
         if (!IsServer || playerDisplayOrder.Count == 0) return;
+
+        Debug.Log($"--- SERVER: Generating scoreboard. Found {playerDisplayOrder.Count} players in display order.");
+
 
         // --- Package Data for Sending ---
         List<FixedString64Bytes> playerNames = new List<FixedString64Bytes>();
@@ -391,6 +397,8 @@ public class LobbyManager : NetworkBehaviour
         {
             Destroy(child.gameObject);
         }
+
+        Debug.Log($"CLIENT LOG: Redrawing scoreboard with {columns} columns.");
 
         // Set the grid layout to have the correct number of columns
         gridContainer.GetComponent<GridLayoutGroup>().constraintCount = columns;
