@@ -22,7 +22,7 @@ public class GameFlow : NetworkBehaviour
     }
 
     // Add this new public method to GameFlow.cs
-    public void ServerSideGameStart()
+    public void ServerSideGameStart(ulong startingPlayerId)
     {
         // This method should only ever run on the server.
         if (!IsServer) return;
@@ -30,7 +30,7 @@ public class GameFlow : NetworkBehaviour
         // Sets the turn order and tells the CardManager to deal the cards.
         cardManager.ClearGameBoard();
         List<ulong> connectedPlayerIds = new List<ulong>(cardManager.players.Keys);
-        StartGameWithPlayers(connectedPlayerIds);
+        StartGameWithPlayers(connectedPlayerIds, startingPlayerId);
         cardManager.StartGameSetup();
     }
 
@@ -47,13 +47,6 @@ public class GameFlow : NetworkBehaviour
     [ClientRpc]
     public void StartGameClientRpc()
     {
-
-        if (cardManager != null && connectionManagerUI != null)
-        {
-            cardManager.RegisterPlayerNameServerRpc(connectionManagerUI.playerNameInputField.text);
-        }
-
-
         connectionManagerUI.ShowGameUI();
         lobbyManager.HideLobby();
     }
@@ -73,14 +66,12 @@ public class GameFlow : NetworkBehaviour
         cardManager.SetLocalPlayerInfo(playerIndex);
     }
 
-    public void StartGameWithPlayers(List<ulong> playerIds)
+    public void StartGameWithPlayers(List<ulong> playerIds, ulong startingPlayerId)
     {
         if (!IsServer) return;
 
         turnOrder = playerIds;
 
-        // Set the turn to the first player in the list
-        SetPlayerTurn(turnOrder[0]);
 
         for (int i = 0; i < turnOrder.Count; i++)
         {
@@ -91,6 +82,7 @@ public class GameFlow : NetworkBehaviour
             };
             InitializeClientRpc(i, clientRpcParams);
         }
+        SetPlayerTurn(startingPlayerId);
     }
 
     // A server-only function to set the turn to a specific player.

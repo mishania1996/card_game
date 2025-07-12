@@ -34,7 +34,7 @@ public class LobbyManager : NetworkBehaviour
 
 
     private Lobby currentLobby;
-    private Dictionary<ulong, List<int>> playerScoresHistory = new Dictionary<ulong, List<int>>();
+    public Dictionary<ulong, List<int>> playerScoresHistory = new Dictionary<ulong, List<int>>();
     private List<ulong> playerDisplayOrder = new List<ulong>();
     private bool isPlayerReady = false;
     private bool isLeaving = false;
@@ -87,6 +87,10 @@ public class LobbyManager : NetworkBehaviour
 
         currentLobby = lobby;
 
+        if (connectionManagerUI != null && cardManager != null)
+        {
+            cardManager.RegisterPlayerNameServerRpc(connectionManagerUI.playerNameInputField.text);
+        }
         // When we first enter the lobby, immediately draw the UI
         RedrawPlayerList();
 
@@ -260,15 +264,49 @@ public class LobbyManager : NetworkBehaviour
         {
             Debug.Log("Host is starting the game...");
 
-            gameFlow.ServerSideGameStart();
+            List<ulong> playerIds = new List<ulong>(cardManager.players.Keys);
+
+
+
+            ulong startingPlayerId;
+            bool isFirstRound = playerScoresHistory.Count == 0 || !playerScoresHistory.ContainsKey(playerIds[0]);
+
+
+            if (isFirstRound)
+            {
+                startingPlayerId = playerIds[0];
+            }
+            else
+            {
+                ulong highestScoringPlayerId = playerIds[0];
+                int highestScore = -999;
+                foreach (ulong clientId in playerIds)
+                {
+                    if (playerScoresHistory.ContainsKey(clientId))
+                    {
+                        List<int> scoreList = playerScoresHistory[clientId];
+                        int currentScore = scoreList[scoreList.Count - 1];
+
+                        if (currentScore > highestScore)
+                        {
+                            highestScore = currentScore;
+                            highestScoringPlayerId = clientId;
+                        }
+                    }
+                }
+                startingPlayerId = highestScoringPlayerId;
+            }
+
+            gameFlow.ServerSideGameStart(startingPlayerId);
 
             // Lock the lobby to prevent new players from joining mid-game
             await LobbyService.Instance.UpdateLobbyAsync(currentLobby.Id, new UpdateLobbyOptions { IsLocked = true });
+            await System.Threading.Tasks.Task.Delay(250);
 
             // Tell all clients to start the game
             gameFlow.StartGameClientRpc();
         }
-        catch (LobbyServiceException e)
+        catch (System.Exception e)
         {
             Debug.Log(e);
         }
