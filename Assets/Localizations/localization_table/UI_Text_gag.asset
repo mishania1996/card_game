@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: UI_Text_gag
+  m_EditorClassIdentifier: 
+  m_LocaleId:
+    m_Code: gag
+  m_SharedData: {fileID: 11400000, guid: da01c2df6f92303189bf3626e21ace21, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 489192255488
+    m_Localized: "yaz ad\u0131n\u0131 "
+    m_Metadata:
+      m_Items: []
+  - m_Id: 526467035136
+    m_Localized: "oyn\xEAz"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 966982201344
+    m_Localized: obnovitet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 995360862208
+    m_Localized: yeni komnata
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1028621692928
+    m_Localized: "komnatan\u0131n ad\u0131"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1066462703616
+    m_Localized: 2 igrok
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1087203536896
+    m_Localized: 3 igrok
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1103775232000
+    m_Localized: 4 igrok
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1164110295040
+    m_Localized: "baalan\xEAz"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1224910925824
+    m_Localized: "az\u0131r"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1242212429824
+    m_Localized: "dil az\u0131r"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1270129717248
+    m_Localized: "az\u0131r"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1290811830272
+    m_Localized: "ba\u015Flat"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1307823927296
+    m_Localized: "\xE7\u0131k"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1336642990080
+    m_Localized: gir
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

@@ -66,7 +66,10 @@ public class LobbyManager : NetworkBehaviour
 
     private void OnDisable()
     {
-        NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
+        }
     }
 
     // This is called by ConnectionManagerUI to give this script the lobby data
