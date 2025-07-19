@@ -16,7 +16,8 @@ MonoBehaviour:
     m_Code: ru
   m_SharedData: {fileID: 11400000, guid: da01c2df6f92303189bf3626e21ace21, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 7960648210834522207
   m_TableData:
   - m_Id: 489192255488
     m_Localized: "\u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u043C\u044F"
@@ -78,6 +79,33 @@ MonoBehaviour:
     m_Localized: "\u0432\u0445\u043E\u0434"
     m_Metadata:
       m_Items: []
+  - m_Id: 13902031187968
+    m_Localized: "\u0432\u0437\u044F\u0442\u044C \u043A\u0430\u0440\u0442\u0443"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 14095359242240
+    m_Localized: "\u043F\u0430\u0441"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 28391241773056
+    m_Localized: '{0} gezer'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1061021647204352
+    m_Localized: '{count} igrok'
+    m_Metadata:
+      m_Items:
+      - rid: 7960648210834522207
+  - m_Id: 1070730332696576
+    m_Localized: "\u0425\u043E\u0434\u0438 {0}"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 7960648210834522207
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 1061021647204352

@@ -14,13 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_GroupName: Localization-String-Tables-gag
   m_GUID: bd96b04eaf86c23929c45d2f911f83af
-  m_SerializeEntries:
-  - m_GUID: 29dedf072be873a039ac684bf468587a
-    m_Address: UI_Text_gag
-    m_ReadOnly: 1
-    m_SerializedLabels:
-    - Locale-gag
-    FlaggedDuringContentUpdateRestriction: 0
+  m_SerializeEntries: []
   m_ReadOnly: 1
   m_Settings: {fileID: 11400000, guid: 5bdf80864af0e8eaab0425beef3bb2b3, type: 2}
   m_SchemaSet:

@@ -75,6 +75,26 @@ MonoBehaviour:
     m_Key: join_button
     m_Metadata:
       m_Items: []
+  - m_Id: 13902031187968
+    m_Key: draw_button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 14095359242240
+    m_Key: pass_button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 28391241773056
+    m_Key: turn_info_text
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1070730332696576
+    m_Key: suit_info_text
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1061021647204352
+    m_Key: players_count_options
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

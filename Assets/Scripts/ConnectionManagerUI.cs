@@ -12,6 +12,8 @@ using Unity.Services.Lobbies.Models;
 using Unity.Services.Multiplayer;
 using TMPro; // For TextMeshPro UI elements
 using UnityEngine.UI;
+using UnityEngine.Localization;
+
 
 public class ConnectionManagerUI : MonoBehaviour
 {
@@ -41,7 +43,11 @@ public class ConnectionManagerUI : MonoBehaviour
     public LobbyManager lobbyManager;
     public GameFlow gameFlow;
 
-    // Add or modify the Awake() method in ConnectionManagerUI.cs
+
+    private Lobby lobbyToJoin;
+
+
+
     private void Awake()
     {
         if (lobbyManager == null)
@@ -56,6 +62,7 @@ public class ConnectionManagerUI : MonoBehaviour
 
     void Start()
     {
+
         enterNamePanel.SetActive(true);
         connectionPanel.SetActive(false);
         gamePanel.SetActive(false);
@@ -67,6 +74,7 @@ public class ConnectionManagerUI : MonoBehaviour
 
         confirmNameButton.onClick.AddListener(OnConfirmNameClicked);
 
+        NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
     }
 
     private void ValidatePlayerName(string inputText)
@@ -172,7 +180,8 @@ public class ConnectionManagerUI : MonoBehaviour
         // Create the Lobby
         Lobby lobby = await LobbyService.Instance.CreateLobbyAsync(roomNameInputField.text, maxPlayers, options);
         Debug.Log($"ConnectionManagerUI is calling SetCurrentLobby on the object named: '{lobbyManager.gameObject.name}'", lobbyManager.gameObject);
-        lobbyManager.SetCurrentLobby(lobby);
+        lobbyToJoin = lobby;
+
 
 
         // Start the Host using the Relay data
@@ -180,9 +189,6 @@ public class ConnectionManagerUI : MonoBehaviour
         transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
 
         NetworkManager.Singleton.StartHost();
-
-        connectingStatusPanel.SetActive(false);
-        lobbyPanel.SetActive(true);
 
         Debug.Log($"Successfully created lobby '{lobby.Name}' with code '{lobby.LobbyCode}' and Relay join code '{joinCode}'");
 
@@ -251,6 +257,8 @@ public class ConnectionManagerUI : MonoBehaviour
 
 
             Lobby joinedLobby = await LobbyService.Instance.JoinLobbyByIdAsync(lobby.Id, options);
+            lobbyToJoin = joinedLobby;
+
             string joinCode = joinedLobby.Data["JoinCode"].Value;
 
             Debug.Log($"Retrieved Relay join code: {joinCode}");
@@ -263,16 +271,26 @@ public class ConnectionManagerUI : MonoBehaviour
             transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "dtls"));
 
             NetworkManager.Singleton.StartClient();
-
-            lobbyManager.SetCurrentLobby(joinedLobby);
-            connectingStatusPanel.SetActive(false);
-            lobbyPanel.SetActive(true);
         }
         catch (LobbyServiceException e)
         {
             Debug.LogError($"Failed to join lobby or relay: {e}");
             connectingStatusPanel.SetActive(false);
             connectionPanel.SetActive(true);
+        }
+    }
+
+    private void HandleClientConnected(ulong clientId)
+    {
+        // This check ensures we only run the logic for our own player
+        if (clientId == NetworkManager.Singleton.LocalClientId)
+        {
+            // Now that we are connected, it's safe to set the lobby
+            // and send the command to the server.
+            lobbyManager.SetCurrentLobby(lobbyToJoin);
+
+            connectingStatusPanel.SetActive(false);
+            lobbyPanel.SetActive(true);
         }
     }
 

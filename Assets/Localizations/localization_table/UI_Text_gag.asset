@@ -16,7 +16,8 @@ MonoBehaviour:
     m_Code: gag
   m_SharedData: {fileID: 11400000, guid: da01c2df6f92303189bf3626e21ace21, type: 2}
   m_Metadata:
-    m_Items: []
+    m_Items:
+    - rid: 7960648210834522208
   m_TableData:
   - m_Id: 489192255488
     m_Localized: "yaz ad\u0131n\u0131 "
@@ -31,7 +32,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 995360862208
-    m_Localized: yeni komnata
+    m_Localized: yap komnata
     m_Metadata:
       m_Items: []
   - m_Id: 1028621692928
@@ -78,6 +79,33 @@ MonoBehaviour:
     m_Localized: gir
     m_Metadata:
       m_Items: []
+  - m_Id: 13902031187968
+    m_Localized: "al\xEAm karta"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 14095359242240
+    m_Localized: "b\xE4n pas"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 28391241773056
+    m_Localized: "{0} \u0445\u043E\u0434\u0438\u0442"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1061021647204352
+    m_Localized: "{count} \u0438\u0433\u0440\u043E\u043A\u0430"
+    m_Metadata:
+      m_Items:
+      - rid: 7960648210834522208
+  - m_Id: 1070730332696576
+    m_Localized: "L\xE4z\u0131m {0}"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: 7960648210834522208
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 1061021647204352
