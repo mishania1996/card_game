@@ -88,16 +88,36 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 28391241773056
-    m_Localized: '{0} gezer'
+    m_Localized: "{0} \u0445\u043E\u0434\u0438\u0442"
     m_Metadata:
       m_Items: []
   - m_Id: 1061021647204352
-    m_Localized: '{count} igrok'
+    m_Localized: "{count} \u0438\u0433\u0440\u043E\u043A\u0430"
     m_Metadata:
       m_Items:
       - rid: 7960648210834522207
   - m_Id: 1070730332696576
     m_Localized: "\u0425\u043E\u0434\u0438 {0}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1707385188085760
+    m_Localized: "\u0432\u044B\u0431\u0435\u0440\u0438 \u043C\u0430\u0441\u0442\u044C"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1707773052153856
+    m_Localized: "\u0447\u0435\u0440\u0432\u0438"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1708075583107072
+    m_Localized: "\u0431\u0443\u0431\u043D\u044B"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1708227819565056
+    m_Localized: "\u043F\u0438\u043A\u0438"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1795671680184320
+    m_Localized: "\u043A\u0440\u0435\u0441\u0442\u0438"
     m_Metadata:
       m_Items: []
   references:

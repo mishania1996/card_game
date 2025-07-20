@@ -88,16 +88,36 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 28391241773056
-    m_Localized: "{0} \u0445\u043E\u0434\u0438\u0442"
+    m_Localized: '{0} gezer'
     m_Metadata:
       m_Items: []
   - m_Id: 1061021647204352
-    m_Localized: "{count} \u0438\u0433\u0440\u043E\u043A\u0430"
+    m_Localized: '{count} igrok '
     m_Metadata:
       m_Items:
       - rid: 7960648210834522208
   - m_Id: 1070730332696576
     m_Localized: "L\xE4z\u0131m {0}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1707385188085760
+    m_Localized: "Ay\u0131r masti"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1707773052153856
+    m_Localized: "\xE7\u0131rva"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1708075583107072
+    m_Localized: pesmet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1708227819565056
+    m_Localized: "g\u0131rga"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1795671680184320
+    m_Localized: krest
     m_Metadata:
       m_Items: []
   references:
