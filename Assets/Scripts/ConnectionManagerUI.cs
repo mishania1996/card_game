@@ -13,6 +13,7 @@ using Unity.Services.Multiplayer;
 using TMPro; // For TextMeshPro UI elements
 using UnityEngine.UI;
 using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 
 
 public class ConnectionManagerUI : MonoBehaviour
@@ -45,7 +46,8 @@ public class ConnectionManagerUI : MonoBehaviour
 
 
     private Lobby lobbyToJoin;
-
+    private LocalizedString[] playerCountOptions;
+    private bool isPopulatingDropdown = false;
 
 
     private void Awake()
@@ -58,6 +60,53 @@ public class ConnectionManagerUI : MonoBehaviour
         {
             Debug.Log("In ConnectionManagerUI, the LobbyManager reference is assigned.", this.gameObject);
         }
+
+        playerCountOptions = new LocalizedString[3];
+        for (int i = 0; i < 3; i++)
+        {
+            // This will create references to your players_2, players_3, and players_4 keys.
+            playerCountOptions[i] = new LocalizedString { TableReference = "UI_Text", TableEntryReference = $"players_{i + 2}" };
+        }
+    }
+
+    private void OnEnable()
+    {
+        // Subscribe to the event that fires when the player changes the language.
+        LocalizationSettings.SelectedLocaleChanged += OnLocaleChanged;
+
+        // Also, populate the dropdown with the correct language when the panel first appears.
+        StartCoroutine(PopulateDropdownOptions());
+    }
+
+    private void OnDisable()
+    {
+        // Unsubscribe from the event to prevent errors.
+        LocalizationSettings.SelectedLocaleChanged -= OnLocaleChanged;
+    }
+
+    private void OnLocaleChanged(Locale newLocale)
+    {
+        StartCoroutine(PopulateDropdownOptions());
+    }
+
+    private System.Collections.IEnumerator PopulateDropdownOptions()
+    {
+        if (isPopulatingDropdown) yield break;
+        isPopulatingDropdown = true;
+
+        playerCountDropdown.ClearOptions();
+        var options = new List<string>();
+
+        // Asynchronously load each translated option.
+        foreach (var localizedOption in playerCountOptions)
+        {
+            var op = localizedOption.GetLocalizedStringAsync();
+            yield return op;
+            options.Add(op.Result);
+        }
+
+        playerCountDropdown.AddOptions(options);
+        isPopulatingDropdown = false;
     }
 
     void Start()
@@ -73,6 +122,8 @@ public class ConnectionManagerUI : MonoBehaviour
         playerNameInputField.onValueChanged.AddListener(ValidatePlayerName);
 
         confirmNameButton.onClick.AddListener(OnConfirmNameClicked);
+        createRoomButton.interactable = false;
+        roomNameInputField.onValueChanged.AddListener(ValidateRoomName);
 
         NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
     }
@@ -85,6 +136,13 @@ public class ConnectionManagerUI : MonoBehaviour
 
         // // Enable the button only if the name is valid.
         confirmNameButton.interactable = isValid;
+    }
+
+    private void ValidateRoomName(string inputText)
+    {
+        // Enable the button only if the input text is not empty or just whitespace.
+        bool isValid = Regex.IsMatch(inputText, @"^[a-zA-Z0-9_-]{1,30}$");
+        createRoomButton.interactable = isValid;
     }
 
 
@@ -147,8 +205,7 @@ public class ConnectionManagerUI : MonoBehaviour
 
   private async void OnCreateRoomClicked()
     {
-        string selectedPlayerCountText = playerCountDropdown.options[playerCountDropdown.value].text.Split(' ')[0];
-        int maxPlayers = int.Parse(selectedPlayerCountText);
+        int maxPlayers = playerCountDropdown.value + 2;
         gameFlow.NumberOfPlayers.Value = maxPlayers;
 
         connectingStatusPanel.SetActive(true);

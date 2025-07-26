@@ -11,7 +11,7 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/Simplest game. Game Scene.unity
     guid: 9e8b4e72a96047ee491e8369c0d67fcd
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/current.unity
     guid: 414743d56c94f0dda8815fcea9be0234
   m_configObjects:
