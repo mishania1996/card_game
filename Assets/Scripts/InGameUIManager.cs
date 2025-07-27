@@ -24,6 +24,7 @@ public class InGameUIManager : MonoBehaviour
     private LocalizedString suitInfoTemplate;
     private string cachedTurnTemplate;
     private string cachedSuitTemplate;
+    private Coroutine updateTextCoroutine;
 
 
     void Start()
@@ -90,23 +91,26 @@ public class InGameUIManager : MonoBehaviour
     private void OnTurnTemplateChanged(string newTemplate)
     {
         cachedTurnTemplate = newTemplate;
-        UpdateAllText();
+        if (updateTextCoroutine != null) StopCoroutine(updateTextCoroutine);
+        updateTextCoroutine = StartCoroutine(UpdateAllTextCoroutine());
     }
 
     private void OnSuitTemplateChanged(string newTemplate)
     {
         cachedSuitTemplate = newTemplate;
-        UpdateAllText();
+        if (updateTextCoroutine != null) StopCoroutine(updateTextCoroutine);
+        updateTextCoroutine = StartCoroutine(UpdateAllTextCoroutine());
     }
 
     private void OnGameDataChanged(FixedString32Bytes previousValue, FixedString32Bytes newValue)
     {
-        UpdateAllText();
+        if (updateTextCoroutine != null) StopCoroutine(updateTextCoroutine);
+        updateTextCoroutine = StartCoroutine(UpdateAllTextCoroutine());
     }
 
-    private void UpdateAllText()
+    private System.Collections.IEnumerator UpdateAllTextCoroutine()
     {
-        if (gameFlow == null) return;
+        if (gameFlow == null) yield break;
 
         // Update Turn Info Text
         if (!string.IsNullOrEmpty(cachedTurnTemplate))
@@ -118,9 +122,17 @@ public class InGameUIManager : MonoBehaviour
         string activeSuit = gameFlow.ActiveSuitString;
         bool suitIsActive = !string.IsNullOrEmpty(activeSuit);
         suitInfoText.gameObject.SetActive(suitIsActive);
+
         if (suitIsActive && !string.IsNullOrEmpty(cachedSuitTemplate))
         {
-            suitInfoText.text = string.Format(cachedSuitTemplate, activeSuit);
+            var localizedSuitName = new LocalizedString { TableReference = "UI_Text", TableEntryReference = $"suit_{activeSuit}" };
+
+            // This is the coroutine equivalent of 'await'
+            var op = localizedSuitName.GetLocalizedStringAsync();
+            yield return op;
+            string translatedSuit = op.Result;
+
+            suitInfoText.text = string.Format(cachedSuitTemplate, translatedSuit);
         }
-    }
+}
 }

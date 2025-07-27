@@ -145,8 +145,6 @@ PlayerSettings:
   - {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   - {fileID: 11400000, guid: 33b667bd7101ba8efb9139bcee98de8b, type: 2}
   - {fileID: 11400000, guid: 0db30eeaf9934766ab8b45dde4ab8533, type: 2}
-  - {fileID: 8640201226587054360, guid: 365c58f0207ffec46afc22a06813cd86, type: 2}
-  - {fileID: 11400000, guid: e41488fe0df1c791e9e8b2968cb85672, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -299,7 +297,7 @@ PlayerSettings:
   - m_BuildTarget: 
     m_Icons:
     - serializedVersion: 2
-      m_Icon: {fileID: 2800000, guid: f13eb4561127f3b8999b23da22a78833, type: 3}
+      m_Icon: {fileID: 2800000, guid: 55063a58415a848ac9684dae03147782, type: 3}
       m_Width: 128
       m_Height: 128
       m_Kind: 0

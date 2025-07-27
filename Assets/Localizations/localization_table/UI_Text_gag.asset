@@ -120,6 +120,14 @@ MonoBehaviour:
     m_Localized: krest
     m_Metadata:
       m_Items: []
+  - m_Id: 4328625568575488
+    m_Localized: "Az\u0131r"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4328649425776640
+    m_Localized: "Dil Az\u0131r"
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:

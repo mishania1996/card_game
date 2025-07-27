@@ -100,19 +100,27 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1707773052153856
-    m_Key: hearts
+    m_Key: suit_hearts
     m_Metadata:
       m_Items: []
   - m_Id: 1708075583107072
-    m_Key: diamonds
+    m_Key: suit_diamonds
     m_Metadata:
       m_Items: []
   - m_Id: 1708227819565056
-    m_Key: spades
+    m_Key: suit_spades
     m_Metadata:
       m_Items: []
   - m_Id: 1795671680184320
-    m_Key: clubs
+    m_Key: suit_clubs
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4328625568575488
+    m_Key: status_ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4328649425776640
+    m_Key: status_not_ready
     m_Metadata:
       m_Items: []
   m_Metadata:

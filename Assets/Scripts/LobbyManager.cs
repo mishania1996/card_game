@@ -8,6 +8,8 @@ using TMPro;
 using Unity.Netcode;
 using Unity.Services.Authentication;
 using Unity.Collections;
+using UnityEngine.Localization;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 public class LobbyManager : NetworkBehaviour
 {
@@ -40,6 +42,10 @@ public class LobbyManager : NetworkBehaviour
     private bool isLeaving = false;
     private Coroutine heartbeatCoroutine;
     private Coroutine pollCoroutine;
+    private LocalizedString statusReadyString;
+    private LocalizedString statusNotReadyString;
+    private string cachedReadyString;
+    private string cachedNotReadyString;
 
     void Awake()
     {
@@ -48,6 +54,9 @@ public class LobbyManager : NetworkBehaviour
         readyButton.onClick.AddListener(OnReadyButtonClicked);
         leaveLobbyButton.onClick.AddListener(OnLeaveLobbyClicked);
         startGameButton.onClick.AddListener(OnStartGameButtonClicked);
+        statusReadyString = new LocalizedString { TableReference = "UI_Text", TableEntryReference = "status_ready" };
+        statusNotReadyString = new LocalizedString { TableReference = "UI_Text", TableEntryReference = "status_not_ready" };
+
     }
 
     private void OnEnable()
@@ -62,6 +71,15 @@ public class LobbyManager : NetworkBehaviour
         {
             NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
         }
+
+        if (statusReadyString != null)
+        {
+            statusReadyString.StringChanged += OnReadyStatusChanged;
+        }
+        if (statusNotReadyString != null)
+        {
+            statusNotReadyString.StringChanged += OnNotReadyStatusChanged;
+        }
     }
 
     private void OnDisable()
@@ -70,6 +88,25 @@ public class LobbyManager : NetworkBehaviour
         {
             NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
         }
+
+        if (statusReadyString != null)
+        {
+            statusReadyString.StringChanged -= OnReadyStatusChanged;
+        }
+        if (statusNotReadyString != null)
+        {
+            statusNotReadyString.StringChanged -= OnNotReadyStatusChanged;
+        }
+    }
+
+    private void OnReadyStatusChanged(string translatedValue)
+    {
+        cachedReadyString = translatedValue;
+    }
+
+    private void OnNotReadyStatusChanged(string translatedValue)
+    {
+        cachedNotReadyString = translatedValue;
     }
 
     // This is called by ConnectionManagerUI to give this script the lobby data
@@ -169,17 +206,16 @@ public class LobbyManager : NetworkBehaviour
 
             // Get the player name from their lobby data
             playerNameText.text = player.Data["PlayerName"].Value;
-
             if (player.Data.ContainsKey("IsReady") && player.Data["IsReady"].Value == "true")
             {
-                readyStatusText.text = "Ready";
-                readyStatusText.color = Color.green;
+                readyStatusText.text = cachedReadyString;
+                readyStatusText.faceColor = Color.green;
             }
             else
             {
-                readyStatusText.text = "Not Ready";
-                readyStatusText.color = Color.yellow;
-                allPlayersReady = false; // If we find anyone not ready, set this to false
+                readyStatusText.text = cachedNotReadyString;
+                readyStatusText.faceColor = Color.red;
+                allPlayersReady = false;
             }
         }
 
@@ -192,6 +228,22 @@ public class LobbyManager : NetworkBehaviour
             bool isLobbyFull = currentLobby.Players.Count == currentLobby.MaxPlayers;
             startGameButton.interactable = allPlayersReady && isLobbyFull;
         }
+    }
+
+
+    private IEnumerator SetLocalizedTextCoroutine(TMP_Text textElement, LocalizedString localizedString, Color color)
+    {
+        if (textElement == null) yield break;
+
+        // Start the asynchronous operation to load the string.
+        var op = localizedString.GetLocalizedStringAsync();
+
+        // Wait here until the operation is finished.
+        yield return op;
+
+        // Now that it's complete, apply the text and color.
+        textElement.text = op.Result;
+        textElement.color = color;
     }
 
 

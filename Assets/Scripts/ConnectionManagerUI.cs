@@ -132,7 +132,7 @@ public class ConnectionManagerUI : MonoBehaviour
     {
         // This regular expression checks for 1-30 characters that are only
         // letters (upper or lower), numbers, underscores, or hyphens.
-        bool isValid = Regex.IsMatch(inputText, @"^[a-zA-Z0-9_-]{1,30}$");
+        bool isValid = Regex.IsMatch(inputText, @"^[a-zA-Z0-9_ -]{1,30}$");
 
         // // Enable the button only if the name is valid.
         confirmNameButton.interactable = isValid;
@@ -141,7 +141,7 @@ public class ConnectionManagerUI : MonoBehaviour
     private void ValidateRoomName(string inputText)
     {
         // Enable the button only if the input text is not empty or just whitespace.
-        bool isValid = Regex.IsMatch(inputText, @"^[a-zA-Z0-9_-]{1,30}$");
+        bool isValid = Regex.IsMatch(inputText, @"^[a-zA-Zа-яА-Я0-9_ -]{1,30}$");
         createRoomButton.interactable = isValid;
     }
 

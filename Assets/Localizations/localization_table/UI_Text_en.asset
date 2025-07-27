@@ -120,6 +120,14 @@ MonoBehaviour:
     m_Localized: clubs
     m_Metadata:
       m_Items: []
+  - m_Id: 4328625568575488
+    m_Localized: Ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4328649425776640
+    m_Localized: Not Ready
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
