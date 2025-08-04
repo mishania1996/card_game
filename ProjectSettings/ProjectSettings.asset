@@ -12,8 +12,8 @@ PlayerSettings:
   targetDevice: 2
   useOnDemandResources: 0
   accelerometerFrequency: 60
-  companyName: DefaultCompany
-  productName: CardGame
+  companyName: Gam
+  productName: President PZ
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -140,11 +140,13 @@ PlayerSettings:
   loadStoreDebugModeEnabled: 0
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
-  bundleVersion: 1.0.2
+  bundleVersion: 1.0.3
   preloadedAssets:
   - {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
-  - {fileID: 11400000, guid: 33b667bd7101ba8efb9139bcee98de8b, type: 2}
   - {fileID: 11400000, guid: 0db30eeaf9934766ab8b45dde4ab8533, type: 2}
+  - {fileID: 7088450534932230289, guid: 365c58f0207ffec46afc22a06813cd86, type: 2}
+  - {fileID: 11400000, guid: 33b667bd7101ba8efb9139bcee98de8b, type: 2}
+  - {fileID: 11400000, guid: e41488fe0df1c791e9e8b2968cb85672, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -271,8 +273,8 @@ PlayerSettings:
   AndroidTargetArchitectures: 2
   AndroidSplashScreenScale: 0
   androidSplashScreen: {fileID: 0}
-  AndroidKeystoreName: '{inproject}: user.keystore'
-  AndroidKeyaliasName: cardgame_key
+  AndroidKeystoreName: '{dedicated}: user.keystore'
+  AndroidKeyaliasName: cardgame
   AndroidEnableArmv9SecurityFeatures: 0
   AndroidEnableArm64MTE: 0
   AndroidBuildApkPerCpuArchitecture: 0

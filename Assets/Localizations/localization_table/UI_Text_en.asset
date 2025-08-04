@@ -24,15 +24,15 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 526467035136
-    m_Localized: play
+    m_Localized: Play
     m_Metadata:
       m_Items: []
   - m_Id: 966982201344
-    m_Localized: refresh
+    m_Localized: Refresh
     m_Metadata:
       m_Items: []
   - m_Id: 995360862208
-    m_Localized: create a room
+    m_Localized: New room
     m_Metadata:
       m_Items: []
   - m_Id: 1028621692928
@@ -56,27 +56,27 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1224910925824
-    m_Localized: ready
+    m_Localized: Ready
     m_Metadata:
       m_Items: []
   - m_Id: 1242212429824
-    m_Localized: not ready
+    m_Localized: Not ready
     m_Metadata:
       m_Items: []
   - m_Id: 1270129717248
-    m_Localized: ready
+    m_Localized: Ready
     m_Metadata:
       m_Items: []
   - m_Id: 1290811830272
-    m_Localized: start
+    m_Localized: Start
     m_Metadata:
       m_Items: []
   - m_Id: 1307823927296
-    m_Localized: leave
+    m_Localized: Leave
     m_Metadata:
       m_Items: []
   - m_Id: 1336642990080
-    m_Localized: join
+    m_Localized: Join
     m_Metadata:
       m_Items: []
   - m_Id: 13902031187968
