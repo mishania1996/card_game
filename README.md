@@ -16,8 +16,13 @@ When the game ends, that's considered the end of the round, and the players with
 ## Technologies Used
 
 Engine: Unity
+
 Language: C#
+
 Networking: Unity Netcode for GameObjects
+
 Online Services: Unity Gaming Services (Authentication, Relay, Lobby)
+
 Localization: Unity Localization Package
+
 Version Control: Git & Git LFS
