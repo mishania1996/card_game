@@ -3,7 +3,7 @@ This is a popular shedding-type card game in Moldova that I couldn't find anywhe
 
 ## How to start the game
 
-Download Unity and build the current project. Or alternatively, email me to get the up to date executable for linux or ubuntu.
+Go to Build folder. If you need Android .apk installer, then just go further to Build/Android and download the file. If you want to play it on Linux, then download all the files from Build/Linux and then run presidentPZ.x86_64 executable.
 
 ## Main rules:
 
@@ -12,3 +12,12 @@ The goal of the game is to get rid of all cards at hand. By default, everyone ca
 Even though the goal of the game is to toss all you cards away, the game ends only if your last played card is either jack or queen and you have not cards left at hand.
 
 When the game ends, that's considered the end of the round, and the players with cards at hand get their values summed up (jack = 2 points, queen = 3 points, ace = 11 points and so on). Exception, if a lost player has only one card at hand which is either jack or queen, that is punished with 20 or 30 poins, respectively. On the other hand, a winner gets his points decreased. If they end the game with jack, that is -20 points, and queen is -30 points.
+
+## Technologies Used
+
+Engine: Unity
+Language: C#
+Networking: Unity Netcode for GameObjects
+Online Services: Unity Gaming Services (Authentication, Relay, Lobby)
+Localization: Unity Localization Package
+Version Control: Git & Git LFS
