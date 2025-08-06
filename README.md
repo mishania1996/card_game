@@ -25,7 +25,7 @@ Online Services: Unity Gaming Services (Authentication, Relay, Lobby)
 
 Localization: Unity Localization Package
 
-Version Control: Git & Git LFS
+Version Control: Git
 
 ## Game UI
 
