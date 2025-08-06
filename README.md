@@ -26,3 +26,22 @@ Online Services: Unity Gaming Services (Authentication, Relay, Lobby)
 Localization: Unity Localization Package
 
 Version Control: Git & Git LFS
+
+## Game UI
+
+### Start Screen 
+
+<img width="1757" height="1005" alt="Screenshot from 2025-08-05 20-23-23" src="https://github.com/user-attachments/assets/57c1f4f4-3608-40ea-91fc-3820ea490e87" />
+
+### List of lobbies 
+
+<img width="1757" height="1005" alt="Screenshot from 2025-08-05 20-24-56" src="https://github.com/user-attachments/assets/85a40f3a-6eec-4c6b-85eb-a333c9f9b2e9" />
+
+### Inside a lobby
+
+<img width="794" height="558" alt="Screenshot from 2025-08-05 20-25-28" src="https://github.com/user-attachments/assets/8def50e3-9ee2-4f61-b5c9-473532821237" />
+
+### The gameplay 
+
+<img width="1844" height="1003" alt="Screenshot from 2025-08-05 20-26-55" src="https://github.com/user-attachments/assets/074b2b41-ee64-40b1-9f6f-65e9813f75c1" />
+
